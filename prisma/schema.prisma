@@ -1,0 +1,511 @@
+// Prisma schema for Seos — AI SEO platform
+// See architecture doc for bounded contexts: Crawling, Auditing, Scoring, Sitemap, Robots, SchemaMarkup
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ---------- Project & domain verification ----------
+// Single-user desktop program — no accounts, no multi-tenancy — but
+// multiple Project rows (sites) are supported (see project-list.tsx); the
+// program's own access to its local DB file is the access control.
+// CreateProjectUseCase only enforces a unique domain per project, not a
+// single project overall.
+
+model Project {
+  id                   String                      @id @default(cuid())
+  name                 String
+  domain               String                      @unique
+  verificationToken    String                      @default(cuid())
+  domainVerifiedAt     DateTime?
+  crawlJobs            CrawlJob[]
+  pages                Page[]
+  auditRuns            AuditRun[]
+  sitemapFiles         SitemapFile[]
+  robotsFiles          RobotsFile[]
+  llmsTxtFiles         LlmsTxtFile[]
+  eventFailures        EventHandlerFailure[]
+  wordPressConnection  WordPressConnection?
+  googleConnection     GoogleConnection?
+  searchPerformance    SearchPerformanceSnapshot[]
+  analyticsSnapshots   AnalyticsSnapshot[]
+  keywordOpportunities KeywordOpportunity[]
+  pagePerformance      PagePerformance[]
+  createdAt            DateTime                    @default(now())
+
+  @@map("projects")
+}
+
+// ---------- Crawling context (aggregate root: CrawlJob) ----------
+
+enum CrawlStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model CrawlJob {
+  id         String      @id @default(cuid())
+  projectId  String
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status     CrawlStatus @default(PENDING)
+  config     Json // { maxDepth, maxPages, respectRobots, concurrency }
+  pageCount  Int         @default(0)
+  error      String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  pages      Page[]
+  auditRuns  AuditRun[]
+  createdAt  DateTime    @default(now())
+
+  @@map("crawl_jobs")
+}
+
+model Page {
+  id                          String         @id @default(cuid())
+  projectId                   String
+  project                     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  crawlJobId                  String
+  crawlJob                    CrawlJob       @relation(fields: [crawlJobId], references: [id], onDelete: Cascade)
+  url                         String
+  statusCode                  Int?
+  title                       String?
+  metaDescription             String?
+  h1                          String?
+  canonicalUrl                String?
+  contentHash                 String?
+  wordCount                   Int?
+  contentExcerpt              String?
+  // Array of { question, answer } — see Faq in src/domain/crawling/entities/page.ts.
+  faqs                        Json           @default("[]")
+  // Server response time in ms (see PageFetchResult.responseTimeMs) — feeds
+  // the slow-response-time audit rule, the only signal in the
+  // "performance" category today.
+  responseTimeMs              Int?
+  // Whether the page already ships valid JSON-LD — feeds the
+  // missing-structured-data audit rule.
+  hasStructuredData           Boolean        @default(false)
+  // Count of <img> elements with no alt attribute — feeds the
+  // missing-image-alt audit rule.
+  imagesMissingAltCount       Int            @default(0)
+  // Each hop the crawler followed before reaching this page, as a JSON
+  // array of URLs — empty if it resolved directly. Feeds the
+  // redirect-chain audit rule.
+  redirectChain               Json           @default("[]")
+  // Count of HTTP sub-resources loaded from an HTTPS page — feeds the
+  // mixed-content audit rule.
+  mixedContentCount           Int            @default(0)
+  // Computed post-crawl by DetectDuplicateContentUseCase (cross-page, not
+  // at parse time) — feeds duplicate-title-rule/duplicate-meta-description-rule.
+  hasDuplicateTitle           Boolean        @default(false)
+  hasDuplicateMetaDescription Boolean        @default(false)
+  // Same as above, but keyed on contentHash instead of title/meta — feeds
+  // duplicate-content-rule. Excludes pages with no real text (wordCount 0).
+  hasDuplicateContent         Boolean        @default(false)
+  // Count of <h1> elements — feeds the multiple-h1 audit rule.
+  h1Count                     Int            @default(0)
+  // Count of <link rel="canonical"> elements — feeds the
+  // multiple-canonical audit rule.
+  canonicalTagCount           Int            @default(0)
+  // Whether <meta name="robots"> declares "noindex" — feeds the noindex
+  // audit rule.
+  isNoindex                   Boolean        @default(false)
+  // Computed post-crawl by DetectOrphanPagesUseCase — whether no other
+  // page in the crawl job links to this one internally. Feeds the
+  // orphan-page audit rule.
+  isOrphan                    Boolean        @default(false)
+  links                       Link[]
+  auditIssues                 AuditIssue[]
+  schemaMarkups               SchemaMarkup[]
+  fixCandidates               FixCandidate[]
+  crawledAt                   DateTime       @default(now())
+
+  @@unique([crawlJobId, url])
+  @@index([projectId])
+  @@map("pages")
+}
+
+model Link {
+  id         String  @id @default(cuid())
+  pageId     String
+  page       Page    @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  targetUrl  String
+  isInternal Boolean
+  isBroken   Boolean @default(false)
+
+  @@map("links")
+}
+
+// ---------- Auditing context (aggregate root: AuditRun) ----------
+
+model AuditRun {
+  id           String       @id @default(cuid())
+  projectId    String
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  crawlJobId   String
+  crawlJob     CrawlJob     @relation(fields: [crawlJobId], references: [id], onDelete: Cascade)
+  overallScore Float?
+  issues       AuditIssue[]
+  scores       SeoScore[]
+  startedAt    DateTime     @default(now())
+  finishedAt   DateTime?
+
+  @@map("audit_runs")
+}
+
+enum Severity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+// Lowercase (unlike Severity/CrawlStatus above) to match the existing
+// application-level vocabulary byte-for-byte wherever possible — most
+// audit rule files and the dashboard already hardcode "technical"/
+// "content"/"performance" as plain strings, and keeping those identical
+// avoided a sprawling, purely-cosmetic rename across dozens of files for
+// what is otherwise just a DB-level constraint hardening. structured-data
+// became structured_data since Prisma enum members can't contain hyphens.
+enum AuditCategory {
+  technical
+  content
+  performance
+  structured_data
+}
+
+model AuditIssue {
+  id             String         @id @default(cuid())
+  auditRunId     String
+  auditRun       AuditRun       @relation(fields: [auditRunId], references: [id], onDelete: Cascade)
+  pageId         String
+  page           Page           @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  ruleId         String // plugin id, e.g. "title-length"
+  category       AuditCategory
+  severity       Severity
+  message        String
+  recommendation String? // filled in async by LLM recommendation job
+  createdAt      DateTime       @default(now())
+  fixCandidates  FixCandidate[]
+
+  @@index([auditRunId])
+  @@map("audit_issues")
+}
+
+// ---------- Fix engine context (SEO Agent Phase 1-3: Action Engine) ----------
+// A FixCandidate is a ready-to-use piece of content (a title, meta
+// description, etc.) addressing a specific AuditIssue. Level 2 autonomy
+// (generate, don't apply) is the default — DRAFT. Level 3 (apply after
+// approval) is reached only when a caller explicitly applies it via
+// ApplyFixCandidateUseCase (see WordPressClientPort) — APPLIED/FAILED.
+
+enum FixType {
+  TITLE
+  META_DESCRIPTION
+  H1
+  CANONICAL_URL
+}
+
+// rule_based is the only source generated today (see fix-candidate.ts);
+// ai_generated is reserved for when fix content itself is LLM-written
+// rather than templated (a further step beyond today's LLM-generated
+// *recommendation text*, see architecture decision #3).
+enum FixSource {
+  rule_based
+  ai_generated
+}
+
+// APPLIED/FAILED added for SEO Agent autonomy Level 3 ("apply after
+// approval") — see ApplyFixCandidateUseCase. DRAFT remains the only
+// status nothing-ever-applies-anything sites will see.
+enum FixStatus {
+  DRAFT
+  APPLIED
+  FAILED
+}
+
+model FixCandidate {
+  id            String     @id @default(cuid())
+  auditIssueId  String
+  auditIssue    AuditIssue @relation(fields: [auditIssueId], references: [id], onDelete: Cascade)
+  pageId        String
+  page          Page       @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  type          FixType
+  content       String
+  source        FixSource
+  status        FixStatus
+  previousValue String? // captured at apply time, for revert()
+  createdAt     DateTime   @default(now())
+
+  @@index([auditIssueId])
+  @@map("fix_candidates")
+}
+
+// ---------- Scoring context ----------
+
+model SeoScore {
+  id         String        @id @default(cuid())
+  auditRunId String
+  auditRun   AuditRun      @relation(fields: [auditRunId], references: [id], onDelete: Cascade)
+  pageId     String? // null = site-level score
+  category   AuditCategory
+  score      Float
+
+  @@map("seo_scores")
+}
+
+// ---------- Schema markup context ----------
+
+// Article | FAQPage | Product etc. aren't generated yet (see
+// schema-generator.ts) — add them here when they are; that's now a real
+// migration, not just a new string literal, which is the point.
+enum SchemaMarkupType {
+  Organization
+  BreadcrumbList
+  FAQPage
+}
+
+enum SchemaMarkupSource {
+  rule_based
+  ai_generated
+  manual
+}
+
+enum SchemaMarkupStatus {
+  DRAFT
+  APPROVED
+}
+
+model SchemaMarkup {
+  id        String             @id @default(cuid())
+  pageId    String
+  page      Page               @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  type      SchemaMarkupType
+  jsonLd    Json
+  source    SchemaMarkupSource
+  status    SchemaMarkupStatus
+  createdAt DateTime           @default(now())
+
+  @@map("schema_markups")
+}
+
+// ---------- Sitemap & robots generators ----------
+
+model SitemapFile {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  content     String
+  pageCount   Int
+  generatedAt DateTime @default(now())
+
+  @@map("sitemap_files")
+}
+
+model LlmsTxtFile {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  content     String
+  pageCount   Int
+  generatedAt DateTime @default(now())
+
+  @@map("llms_txt_files")
+}
+
+model RobotsFile {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  content     String
+  generatedAt DateTime @default(now())
+
+  @@map("robots_files")
+}
+
+// ---------- Event handler failures ----------
+// Domain events fan out to independent, isolated handlers (see
+// DomainEventDispatcher) — one handler failing (e.g. score calculation)
+// must never take the others down, but it also must never be invisible.
+// Every caught handler failure is persisted here so the dashboard can tell
+// "still generating" apart from "failed and will never appear", instead of
+// polling forever and giving up with no explanation.
+model EventHandlerFailure {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  eventType  String // the DomainEvent subclass name, e.g. "AuditRunCompleted"
+  message    String
+  occurredAt DateTime @default(now())
+
+  @@index([projectId])
+  @@map("event_handler_failures")
+}
+
+// ---------- WordPress integration (SEO Agent Phase 2: Action Engine, Level 3) ----------
+// One connection per project (1:1) — a project is one verified site, so it
+// maps to at most one WordPress install. encryptedPassword is an
+// Application Password (WordPress 5.6+ built-in REST API auth — no OAuth
+// app registration needed), encrypted at rest by the repository layer
+// (see credential-cipher.ts), never stored or logged in plaintext.
+model WordPressConnection {
+  id                String   @id @default(cuid())
+  projectId         String   @unique
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  siteUrl           String
+  username          String
+  encryptedPassword String
+  createdAt         DateTime @default(now())
+
+  @@map("wordpress_connections")
+}
+
+// ---------- LLM settings (app-level, not project-scoped) ----------
+// One global row (fixed id, enforced via upsert in the repository) — this
+// is a single-user desktop program, so "which LLM key is configured" is an
+// installation-wide setting, not a per-project one, same way there's only
+// ever one Project per install. encryptedApiKey is encrypted at rest the
+// same way WordPressConnection's password is (see credential-cipher.ts);
+// the key is never returned to the client by the API/DTO layer.
+enum LlmProvider {
+  openai
+  anthropic
+  deepseek
+}
+
+model LlmSettings {
+  id              String      @id @default("singleton")
+  provider        LlmProvider
+  encryptedApiKey String
+  model           String?
+  updatedAt       DateTime    @updatedAt
+
+  @@map("llm_settings")
+}
+
+// ---------- Google tracking (Search Console + GA4) ----------
+// One connection per project (1:1), same shape/reasoning as
+// WordPressConnection — a project is one site, so it maps to at most one
+// Google account's worth of access. Only the refresh token is persisted
+// (encrypted, see credential-cipher.ts); access tokens are short-lived and
+// re-derived from it on every fetch rather than stored, so there's no
+// stale-token state to manage. gscSiteUrl is the Search Console property
+// the user picked (auto-matched against the project's domain when
+// possible — see ConnectGoogleAccountUseCase); ga4PropertyId has no
+// reliable auto-detection path without an extra Admin API scope, so it's
+// entered manually in the dashboard.
+model GoogleConnection {
+  id                    String   @id @default(cuid())
+  projectId             String   @unique
+  project               Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  encryptedRefreshToken String
+  gscSiteUrl            String?
+  ga4PropertyId         String?
+  autoRefreshEnabled    Boolean  @default(true)
+  createdAt             DateTime @default(now())
+
+  @@map("google_connections")
+}
+
+// One row per project per day — overwritten (not appended) on a re-fetch
+// of the same day, since GSC itself revises the last few days' numbers as
+// more data settles; @@unique on (projectId, date) is what makes that an
+// upsert instead of a growing duplicate history.
+model SearchPerformanceSnapshot {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  date        DateTime
+  clicks      Int
+  impressions Int
+  ctr         Float
+  position    Float
+  fetchedAt   DateTime @default(now())
+
+  @@unique([projectId, date])
+  @@map("search_performance_snapshots")
+}
+
+// organicSessions/conversions only (not total site traffic) — for an SEO
+// tool, "is content driving organic traffic" is the relevant story, not
+// paid/direct/referral sessions. Same overwrite-by-date shape as
+// SearchPerformanceSnapshot.
+model AnalyticsSnapshot {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  date            DateTime
+  organicSessions Int
+  conversions     Int
+  fetchedAt       DateTime @default(now())
+
+  @@unique([projectId, date])
+  @@map("analytics_snapshots")
+}
+
+// Search Console rows filtered to the "striking distance" band (see
+// FetchKeywordOpportunitiesUseCase) — a page already ranking for a query
+// but not yet on page 1 is the highest-ROI content-improvement target,
+// since relevance is already established. Upsert by (projectId, pageUrl,
+// query) on refetch, same overwrite-not-append reasoning as
+// SearchPerformanceSnapshot.
+model KeywordOpportunity {
+  id                String             @id @default(cuid())
+  projectId         String
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pageUrl           String
+  query             String
+  clicks            Int
+  impressions       Int
+  ctr               Float
+  position          Float
+  fetchedAt         DateTime           @default(now())
+  contentSuggestion ContentSuggestion?
+
+  @@unique([projectId, pageUrl, query])
+  @@index([projectId])
+  @@map("keyword_opportunities")
+}
+
+// Real per-page GSC totals (unfiltered) — a byproduct of the same
+// fetchPageQueryPerformance call that builds KeywordOpportunity, but
+// aggregated across ALL queries for a page before KeywordOpportunity's
+// "striking distance" filter is applied. KeywordOpportunity alone can't
+// power traffic-impact scoring: it deliberately excludes a page's
+// best-performing queries (already ranking well), which would make a
+// site's most important page look like it has zero traffic.
+model PagePerformance {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pageUrl     String
+  clicks      Int
+  impressions Int
+  ctr         Float
+  position    Float
+  fetchedAt   DateTime @default(now())
+
+  @@unique([projectId, pageUrl])
+  @@index([projectId])
+  @@map("page_performance")
+}
+
+// AI-drafted "what to add to this page" text for a single KeywordOpportunity
+// — generated on demand (a user clicks "Generate suggestion"), never
+// automatically for every opportunity, since each generation is a real LLM
+// API call. DRAFT-only: there is no apply/revert, only Copy (see Phase 3 in
+// the project plan for the deferred auto-apply step).
+model ContentSuggestion {
+  id                   String             @id @default(cuid())
+  keywordOpportunityId String             @unique
+  keywordOpportunity   KeywordOpportunity @relation(fields: [keywordOpportunityId], references: [id], onDelete: Cascade)
+  content              String
+  createdAt            DateTime           @default(now())
+
+  @@map("content_suggestions")
+}

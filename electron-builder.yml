@@ -1,0 +1,40 @@
+appId: com.seos.app
+productName: Seos
+directories:
+  output: dist-installer
+
+files:
+  - dist-electron/**
+  - package.json
+
+extraResources:
+  - from: .next/standalone
+    to: standalone
+  - from: prisma/migrations
+    to: prisma/migrations
+
+# better-sqlite3's compiled .node binary can't be loaded from inside an
+# asar archive — unpack it (and anything that requires it transitively)
+# so Node's native module loader can find it on the real filesystem.
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+
+# electron-builder rebuilds native deps (better-sqlite3) against Electron's
+# own Node ABI automatically as part of packaging — not the system Node
+# used for `npm install` during development.
+npmRebuild: true
+
+# GitHub Releases is what electron-updater (see electron/main.ts) polls for
+# new versions. electron-builder infers owner/repo from package.json's
+# "repository" field if present — add one (or "owner"/"repo" keys here
+# directly) once this points at a real GitHub repo, and set GH_TOKEN when
+# running `npm run electron:dist -- --publish always` to actually upload.
+publish:
+  provider: github
+
+mac:
+  category: public.app-category.developer-tools
+win:
+  target: nsis
+linux:
+  target: AppImage
