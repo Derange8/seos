@@ -65,6 +65,37 @@ describe("RunAuditUseCase", () => {
     expect(auditRun.overallScore).toBeLessThan(100);
   });
 
+  it("skips content-quality rules for a broken (4xx/5xx) page, but still reports broken-status-code", async () => {
+    const pageRepository = new FakePageRepository();
+    await pageRepository.save(
+      "project-1",
+      Page.create("job-1", url("https://example.com/missing"), { title: null, statusCode: 404 })
+    );
+
+    const auditRunRepository = new FakeAuditRunRepository();
+    const useCase = new RunAuditUseCase({ pageRepository, auditRunRepository });
+
+    const auditRun = await useCase.execute("project-1", "job-1");
+
+    const ruleIds = auditRun.issues.map((issue) => issue.ruleId);
+    expect(ruleIds).toEqual(["broken-status-code"]);
+  });
+
+  it("still runs rules normally for a page with no statusCode recorded yet (null, not a known failure)", async () => {
+    const pageRepository = new FakePageRepository();
+    await pageRepository.save(
+      "project-1",
+      Page.create("job-1", url("https://example.com/unknown-status"), { title: null })
+    );
+
+    const auditRunRepository = new FakeAuditRunRepository();
+    const useCase = new RunAuditUseCase({ pageRepository, auditRunRepository });
+
+    const auditRun = await useCase.execute("project-1", "job-1");
+
+    expect(auditRun.issues.map((issue) => issue.ruleId)).toContain("missing-title");
+  });
+
   it("handles a crawl job with zero pages without error", async () => {
     const pageRepository = new FakePageRepository();
     const auditRunRepository = new FakeAuditRunRepository();

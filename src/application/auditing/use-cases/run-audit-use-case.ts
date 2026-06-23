@@ -35,6 +35,7 @@ export class RunAuditUseCase {
     const auditRun = AuditRun.create(projectId, crawlJobId);
     for (const page of pages) {
       for (const rule of this.rules) {
+        if (page.isBroken() && !rule.appliesToFailedPages) continue;
         for (const finding of rule.evaluate(page)) {
           auditRun.addIssue(AuditIssue.create(auditRun.id, page.id, finding));
         }

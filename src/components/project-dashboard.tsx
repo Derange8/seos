@@ -978,6 +978,23 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                                     {fix.status === "APPLIED" && <span className="ml-2 text-green-400">Applied</span>}
                                     {fix.status === "FAILED" && <span className="ml-2 text-red-400">Apply failed</span>}
                                   </p>
+                                  {/* Only TITLE/META_DESCRIPTION can ever be auto-applied (see the
+                                      Approve & Apply button below), and only with WordPress connected
+                                      — say so plainly here too, since this box is the first thing a
+                                      user sees and "Quick win" elsewhere could otherwise read as a
+                                      promise this tool can't keep for H1/CANONICAL_URL fixes or
+                                      without a WordPress connection. */}
+                                  {fix.type === "TITLE" || fix.type === "META_DESCRIPTION" ? (
+                                    !wordPressConnection && (
+                                      <p className="text-xs text-muted-foreground/70">
+                                        Connect WordPress to apply this automatically — for now, copy it in manually.
+                                      </p>
+                                    )
+                                  ) : (
+                                    <p className="text-xs text-muted-foreground/70">
+                                      No automatic apply for this fix type yet — copy it in manually.
+                                    </p>
+                                  )}
                                   <p className="text-xs">{fix.content}</p>
                                   {/* META_DESCRIPTION applies to WordPress's core "excerpt" field —
                                       a real, always-writable field, but not guaranteed to be what the

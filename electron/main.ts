@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, shell, safeStorage } from "electron";
 import { autoUpdater } from "electron-updater";
 import log from "electron-log";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -23,15 +23,35 @@ let mainWindow: BrowserWindow | null = null;
 
 // Generated once per install, persisted in userData — never bundled into
 // the shipped app (a baked-in key would be the same for every install,
-// defeating the point of encrypting credentials at rest). Falls back to
-// generating a fresh one if the file is ever missing/corrupt.
+// defeating the point of encrypting credentials at rest). The on-disk file
+// is itself wrapped via Electron's safeStorage (OS keychain/DPAPI/libsecret)
+// rather than written as plain bytes: a flat key file sitting next to the
+// SQLite db it decrypts gives an attacker with filesystem access (stolen
+// disk, malware, another local account) the key for free. Wrapping it
+// ties decryption to the OS's own credential store for the logged-in user,
+// which a raw file copy can't satisfy on its own.
 function ensureCredentialEncryptionKey(userDataDir: string): string {
   const keyPath = path.join(userDataDir, "credential-encryption.key");
+  const encryptionAvailable = safeStorage.isEncryptionAvailable();
+
   if (fs.existsSync(keyPath)) {
-    return fs.readFileSync(keyPath, "utf-8").trim();
+    const stored = fs.readFileSync(keyPath);
+    if (!encryptionAvailable) return stored.toString("utf-8").trim();
+    try {
+      return safeStorage.decryptString(stored);
+    } catch {
+      // Pre-existing install from before this file was OS-wrapped (plain
+      // key bytes from an older version of Seos) — read it as-is, then
+      // re-persist wrapped so this is a one-time, automatic migration.
+      const legacyKey = stored.toString("utf-8").trim();
+      fs.writeFileSync(keyPath, safeStorage.encryptString(legacyKey), { mode: 0o600 });
+      return legacyKey;
+    }
   }
+
   const key = crypto.randomBytes(32).toString("base64");
-  fs.writeFileSync(keyPath, key, { mode: 0o600 });
+  const toPersist = encryptionAvailable ? safeStorage.encryptString(key) : Buffer.from(key, "utf-8");
+  fs.writeFileSync(keyPath, toPersist, { mode: 0o600 });
   return key;
 }
 
