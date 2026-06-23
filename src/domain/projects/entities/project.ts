@@ -5,6 +5,15 @@ export class ProjectNotFoundError extends DomainError {
   readonly code = "PROJECT_NOT_FOUND";
 }
 
+// Gates write-capable integrations (WordPress connect) only — crawling/
+// auditing a domain is read-only, the same as any SEO audit tool or search
+// engine crawler, and doesn't need proof of ownership. Verification matters
+// once Seos is asked to store credentials and push real changes to a live
+// site; it never mattered for just reading one.
+export class DomainNotVerifiedError extends DomainError {
+  readonly code = "DOMAIN_NOT_VERIFIED";
+}
+
 const WELL_KNOWN_VERIFICATION_PATH = "/.well-known/seos-verify.txt";
 
 export interface ProjectProps {

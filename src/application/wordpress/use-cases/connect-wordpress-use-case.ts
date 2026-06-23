@@ -1,6 +1,8 @@
 import { WordPressConnection } from "@/domain/wordpress/entities/wordpress-connection";
+import { DomainNotVerifiedError, ProjectNotFoundError } from "@/domain/projects/entities/project";
 import type { WordPressConnectionRepositoryPort } from "@/application/wordpress/ports/wordpress-connection-repository-port";
 import type { WordPressClientError, WordPressClientPort } from "@/application/wordpress/ports/wordpress-client-port";
+import type { ProjectRepositoryPort } from "@/application/projects/ports/project-repository-port";
 import { DomainError } from "@/shared/domain-error";
 import { err, ok, type Result } from "@/shared/result";
 
@@ -13,6 +15,7 @@ export class InvalidWordPressCredentialsError extends DomainError {
 }
 
 export interface ConnectWordPressDeps {
+  projectRepository: ProjectRepositoryPort;
   wordPressClient: WordPressClientPort;
   wordPressConnectionRepository: WordPressConnectionRepositoryPort;
 }
@@ -31,7 +34,29 @@ export class ConnectWordPressUseCase {
     siteUrlInput: string,
     usernameInput: string,
     applicationPasswordInput: string
-  ): Promise<Result<WordPressConnection, InvalidSiteUrlError | InvalidWordPressCredentialsError | WordPressClientError>> {
+  ): Promise<
+    Result<
+      WordPressConnection,
+      | InvalidSiteUrlError
+      | InvalidWordPressCredentialsError
+      | WordPressClientError
+      | ProjectNotFoundError
+      | DomainNotVerifiedError
+    >
+  > {
+    const project = await this.deps.projectRepository.findById(projectId);
+    if (!project) {
+      return err(new ProjectNotFoundError(`Project "${projectId}" not found`));
+    }
+    // This is the point that actually matters: storing credentials and
+    // pushing real changes to a live site requires proof you're allowed to
+    // — unlike crawling, which is read-only (see StartCrawlUseCase).
+    if (!project.isVerified) {
+      return err(
+        new DomainNotVerifiedError(`Project "${projectId}" has not verified ownership of its domain yet`)
+      );
+    }
+
     const siteUrlResult = this.normalizeSiteUrl(siteUrlInput);
     if (!siteUrlResult.ok) return siteUrlResult;
 

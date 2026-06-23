@@ -3,6 +3,7 @@ import { generateFixCandidates } from "@/domain/fixes/services/fix-engine";
 import { AuditIssue } from "@/domain/auditing/entities/audit-issue";
 import { Page } from "@/domain/crawling/entities/page";
 import { Url } from "@/domain/crawling/value-objects/url";
+import { KeywordOpportunity } from "@/domain/tracking/entities/keyword-opportunity";
 
 function url(input: string): Url {
   const result = Url.create(input);
@@ -81,5 +82,28 @@ describe("generateFixCandidates", () => {
     );
 
     expect(candidates.map((c) => c.type).sort()).toEqual(["CANONICAL_URL", "TITLE"]);
+  });
+
+  it("threads each page's best keyword opportunity through to its generator", () => {
+    const page = Page.create("job-1", url("https://example.com/widgets"), { h1: "Our Widgets" });
+    const issue = AuditIssue.create("run-1", page.id, {
+      ruleId: "title-length",
+      category: "content",
+      severity: "WARNING",
+      message: "msg",
+    });
+    const opportunity = KeywordOpportunity.create(
+      "project-1",
+      "https://example.com/widgets",
+      "best budget widgets",
+      12,
+      300,
+      0.04,
+      14.2
+    );
+
+    const candidates = generateFixCandidates([issue], new Map([[page.id, page]]), undefined, [opportunity]);
+
+    expect(candidates[0]?.content).toContain("Best Budget Widgets");
   });
 });

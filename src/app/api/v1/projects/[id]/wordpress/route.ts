@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/infrastructure/persistence/prisma/prisma-client";
 import { PrismaWordPressConnectionRepository } from "@/infrastructure/persistence/prisma/prisma-wordpress-connection-repository";
+import { PrismaProjectRepository } from "@/infrastructure/persistence/prisma/prisma-project-repository";
 import { WordPressRestApiClient } from "@/infrastructure/wordpress/wordpress-rest-api-client";
 import { ConnectWordPressUseCase } from "@/application/wordpress/use-cases/connect-wordpress-use-case";
 import { toWordPressConnectionDto } from "@/application/wordpress/dto";
@@ -8,6 +9,8 @@ import { requireProjectAccess } from "@/infrastructure/auth/require-project-acce
 import { shouldAllowPrivateNetworks } from "@/infrastructure/config/allow-private-networks";
 
 const ERROR_STATUS: Record<string, number> = {
+  PROJECT_NOT_FOUND: 404,
+  DOMAIN_NOT_VERIFIED: 403,
   INVALID_SITE_URL: 400,
   INVALID_WORDPRESS_CREDENTIALS: 400,
   WORDPRESS_UNAUTHORIZED: 401,
@@ -43,6 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const useCase = new ConnectWordPressUseCase({
+    projectRepository: new PrismaProjectRepository(prisma),
     wordPressClient: new WordPressRestApiClient({ allowPrivateNetworks: shouldAllowPrivateNetworks() }),
     wordPressConnectionRepository: new PrismaWordPressConnectionRepository(prisma),
   });

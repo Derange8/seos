@@ -3,6 +3,7 @@ import { metaDescriptionFixGenerator } from "@/domain/fixes/services/generators/
 import { AuditIssue } from "@/domain/auditing/entities/audit-issue";
 import { Page } from "@/domain/crawling/entities/page";
 import { Url } from "@/domain/crawling/value-objects/url";
+import { KeywordOpportunity } from "@/domain/tracking/entities/keyword-opportunity";
 
 function url(input: string): Url {
   const result = Url.create(input);
@@ -47,5 +48,20 @@ describe("metaDescriptionFixGenerator", () => {
     const page = Page.create("job-1", url("https://example.com/"), { contentExcerpt: excerpt });
     const candidate = metaDescriptionFixGenerator.generate(page, issue());
     expect(candidate?.content.length).toBeLessThanOrEqual(160);
+  });
+
+  it("leads with a real GSC keyword when one is given for this page", () => {
+    const page = Page.create("job-1", url("https://example.com/"), { contentExcerpt: "A".repeat(90) });
+    const opportunity = KeywordOpportunity.create("project-1", "https://example.com/", "best budget widgets", 12, 300, 0.04, 14.2);
+    const candidate = metaDescriptionFixGenerator.generate(page, issue(), { topKeywordOpportunity: opportunity });
+    expect(candidate?.content.startsWith("best budget widgets:")).toBe(true);
+  });
+
+  it("doesn't restate the keyword if the excerpt already covers it", () => {
+    const excerpt = "Best budget widgets reviewed and compared for every home workshop, updated for this year's lineup.";
+    const page = Page.create("job-1", url("https://example.com/"), { contentExcerpt: excerpt });
+    const opportunity = KeywordOpportunity.create("project-1", "https://example.com/", "best budget widgets", 12, 300, 0.04, 14.2);
+    const candidate = metaDescriptionFixGenerator.generate(page, issue(), { topKeywordOpportunity: opportunity });
+    expect(candidate?.content).toBe(excerpt);
   });
 });

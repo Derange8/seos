@@ -8,10 +8,6 @@ import type { CrawlQueuePort } from "@/application/crawling/ports/crawl-queue-po
 import type { ProjectRepositoryPort } from "@/application/projects/ports/project-repository-port";
 import { ok, err, type Result } from "@/shared/result";
 
-export class DomainNotVerifiedError extends DomainError {
-  readonly code = "DOMAIN_NOT_VERIFIED";
-}
-
 export class CrawlAlreadyInProgressError extends DomainError {
   readonly code = "CRAWL_ALREADY_IN_PROGRESS";
 }
@@ -32,25 +28,18 @@ export class StartCrawlUseCase {
   ): Promise<
     Result<
       CrawlJob,
-      | InvalidCrawlConfigError
-      | CrawlJobStateError
-      | ProjectNotFoundError
-      | DomainNotVerifiedError
-      | CrawlAlreadyInProgressError
+      InvalidCrawlConfigError | CrawlJobStateError | ProjectNotFoundError | CrawlAlreadyInProgressError
     >
   > {
     const project = await this.deps.projectRepository.findById(projectId);
     if (!project) {
       return err(new ProjectNotFoundError(`Project "${projectId}" not found`));
     }
-    // Multi-tenant SaaS: a verified owner may crawl their domain, but
-    // verification is required first (Crawler Engine design §1/§2 — the
-    // crawler must never be usable as an anonymous third-party site scraper).
-    if (!project.isVerified) {
-      return err(
-        new DomainNotVerifiedError(`Project "${projectId}" has not verified ownership of its domain yet`)
-      );
-    }
+    // Crawling/auditing is read-only — no different from any SEO audit tool
+    // or search engine crawler requesting a public page, so it doesn't
+    // require proof of domain ownership. Verification is only required
+    // before a write-capable integration (WordPress connect) is allowed —
+    // see ConnectWordPressUseCase.
 
     // One active crawl per project at a time — without this, nothing stops
     // a caller (or an impatient double-click) from spawning many concurrent

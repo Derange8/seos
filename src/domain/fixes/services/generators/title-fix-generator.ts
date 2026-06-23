@@ -1,13 +1,29 @@
 import type { Page } from "@/domain/crawling/entities/page";
 import type { AuditIssue } from "@/domain/auditing/entities/audit-issue";
 import { FixCandidate } from "@/domain/fixes/entities/fix-candidate";
-import type { FixGenerator } from "@/domain/fixes/services/fix-generator";
+import type { FixGenerator, FixGeneratorContext } from "@/domain/fixes/services/fix-generator";
 import { humanizeUrlSlug } from "@/domain/fixes/services/url-slug";
 import { TITLE_MAX_LENGTH, TITLE_MIN_LENGTH } from "@/domain/auditing/services/rules/title-length-rule";
+import type { KeywordOpportunity } from "@/domain/tracking/entities/keyword-opportunity";
 
-function baseCandidate(page: Page): string {
-  if (page.h1 && page.h1.trim().length > 0) return page.h1.trim();
-  return humanizeUrlSlug(page.url.pathname);
+function capitalizeWords(text: string): string {
+  return text.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+// Without a real GSC signal, the best honest guess is still the page's own
+// H1/URL — but when this page is already getting real search impressions
+// for a specific query (just not ranking well for it), leading with that
+// query is a far more targeted suggestion than a generic template, which
+// is the gap a purely rule-based generator couldn't close before.
+function baseCandidate(page: Page, opportunity: KeywordOpportunity | null): string {
+  const subject = page.h1 && page.h1.trim().length > 0 ? page.h1.trim() : humanizeUrlSlug(page.url.pathname);
+  if (!opportunity) return subject;
+
+  const keyword = capitalizeWords(opportunity.query);
+  // Already covers the keyword (e.g. the H1 already says it) — don't
+  // restate it redundantly.
+  if (subject.toLowerCase().includes(opportunity.query.toLowerCase())) return subject;
+  return `${keyword} — ${subject}`;
 }
 
 // Targets the exact same range title-length-rule checks for, so a
@@ -27,8 +43,8 @@ function fitToRange(text: string, hostname: string): string {
 
 export const titleFixGenerator: FixGenerator = {
   ruleIds: ["missing-title", "title-length"],
-  generate(page: Page, issue: AuditIssue): FixCandidate | null {
-    const content = fitToRange(baseCandidate(page), page.url.hostname);
+  generate(page: Page, issue: AuditIssue, context?: FixGeneratorContext): FixCandidate | null {
+    const content = fitToRange(baseCandidate(page, context?.topKeywordOpportunity ?? null), page.url.hostname);
     return FixCandidate.createRuleBased(issue.id, page.id, "TITLE", content);
   },
 };

@@ -36,6 +36,7 @@ model Project {
   analyticsSnapshots   AnalyticsSnapshot[]
   keywordOpportunities KeywordOpportunity[]
   pagePerformance      PagePerformance[]
+  contentIdeas         ContentIdea[]
   createdAt            DateTime                    @default(now())
 
   @@map("projects")
@@ -508,4 +509,26 @@ model ContentSuggestion {
   createdAt            DateTime           @default(now())
 
   @@map("content_suggestions")
+}
+
+// LLM-drafted "new page worth writing" ideas, derived from existing crawled
+// pages' titles/H1s — NOT backed by real search-volume/ranking data (unlike
+// KeywordOpportunity), so this is explicitly framed everywhere as ideas to
+// consider, never as a verified opportunity. Generated on demand (a user
+// clicks "Generate content ideas" for the project), never automatically,
+// since it's a real LLM API call. A regeneration replaces the project's
+// entire previous batch rather than accumulating duplicates across runs.
+model ContentIdea {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourcePageUrl  String
+  topic          String
+  suggestedTitle String
+  suggestedSlug  String
+  rationale      String
+  createdAt      DateTime @default(now())
+
+  @@index([projectId])
+  @@map("content_ideas")
 }

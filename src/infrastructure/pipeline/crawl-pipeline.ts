@@ -30,6 +30,7 @@ import { GenerateSchemaMarkupUseCase } from "@/application/schema-markup/use-cas
 import { PrismaSeoScoreRepository } from "@/infrastructure/persistence/prisma/prisma-seo-score-repository";
 import { CalculateSeoScoresUseCase } from "@/application/scoring/use-cases/calculate-seo-scores-use-case";
 import { PrismaFixCandidateRepository } from "@/infrastructure/persistence/prisma/prisma-fix-candidate-repository";
+import { PrismaKeywordOpportunityRepository } from "@/infrastructure/persistence/prisma/prisma-keyword-opportunity-repository";
 import { GenerateFixCandidatesUseCase } from "@/application/fixes/use-cases/generate-fix-candidates-use-case";
 import { GenerateAuditRecommendationsUseCase } from "@/application/auditing/use-cases/generate-audit-recommendations-use-case";
 import { DynamicRecommendationProvider } from "@/infrastructure/llm/dynamic-recommendation-provider";
@@ -109,6 +110,7 @@ export function createCrawlPipeline(
     auditRunRepository,
     pageRepository,
     fixCandidateRepository: new PrismaFixCandidateRepository(prisma),
+    keywordOpportunityRepository: new PrismaKeywordOpportunityRepository(prisma),
   });
 
   const recommendationQueue = new InProcessRecommendationQueue(

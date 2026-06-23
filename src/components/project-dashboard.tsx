@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,8 @@ import type { FixCandidateDto } from "@/application/fixes/dto";
 import type { AuditDeltaDto } from "@/application/delta-audit/dto";
 import type { WordPressConnectionDto } from "@/application/wordpress/dto";
 import type { SearchPerformanceSnapshotDto, AnalyticsSnapshotDto, KeywordOpportunityDto } from "@/application/tracking/dto";
+import type { ContentIdeaDto } from "@/application/content-enrichment/dto";
+import { formatAuditReport } from "@/lib/format-audit-report";
 
 type KeywordOpportunityRow = KeywordOpportunityDto & { suggestion: string | null };
 
@@ -102,6 +104,7 @@ const TRANSLATIONS = {
   disconnecting: { en: "Disconnecting…", tr: "Bağlantı kesiliyor…" },
   copy: { en: "Copy", tr: "Kopyala" },
   copied: { en: "Copied!", tr: "Kopyalandı!" },
+  copyFullReport: { en: "Copy full report", tr: "Tüm raporu kopyala" },
   approveApply: { en: "Approve & Apply", tr: "Onayla & Uygula" },
   applying: { en: "Applying…", tr: "Uygulanıyor…" },
   revert: { en: "Revert", tr: "Geri al" },
@@ -165,6 +168,7 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [expandedSchemaId, setExpandedSchemaId] = useState<string | null>(null);
   const [fixCandidates, setFixCandidates] = useState<FixCandidateDto[]>([]);
   const [copiedFixId, setCopiedFixId] = useState<string | null>(null);
+  const [copiedFullReport, setCopiedFullReport] = useState(false);
   const [delta, setDelta] = useState<AuditDeltaDto | null>(null);
   const [eventFailures, setEventFailures] = useState<EventFailureDto[]>([]);
 
@@ -193,6 +197,11 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [suggestionError, setSuggestionError] = useState<Record<string, string>>({});
   const [copiedSuggestionId, setCopiedSuggestionId] = useState<string | null>(null);
 
+  const [contentIdeas, setContentIdeas] = useState<ContentIdeaDto[]>([]);
+  const [isGeneratingContentIdeas, setIsGeneratingContentIdeas] = useState(false);
+  const [contentIdeasError, setContentIdeasError] = useState<string | null>(null);
+  const [copiedContentIdeaId, setCopiedContentIdeaId] = useState<string | null>(null);
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -214,6 +223,18 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       // A network failure here just means the card never appears —
       // harmless, but left uncaught this would be an unhandled rejection.
       .catch((error: unknown) => console.error("Failed to fetch robots.txt", error));
+  }, [project.id]);
+
+  // Content ideas have no dependency on Google being connected — they
+  // come from the crawl's own page titles/H1s — so they're fetched
+  // unconditionally, same as robots.txt above. An empty result just means
+  // nobody has clicked "Generate content ideas" yet (or there's no crawl
+  // to derive them from).
+  useEffect(() => {
+    fetch(`/api/v1/projects/${project.id}/content-ideas`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data: ContentIdeaDto[]) => setContentIdeas(data))
+      .catch((error: unknown) => console.error("Failed to fetch content ideas", error));
   }, [project.id]);
 
   // Surfaces any past domain-event-handler failures (e.g. score
@@ -348,6 +369,29 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
 
     setProject(data);
     setVerifyMessage(data.isVerified ? "Domain verified!" : "Not verified yet — record not found.");
+  }
+
+  async function handleGenerateContentIdeas() {
+    setIsGeneratingContentIdeas(true);
+    setContentIdeasError(null);
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${project.id}/content-ideas`, { method: "POST" });
+    } catch {
+      setIsGeneratingContentIdeas(false);
+      setContentIdeasError("Network error — check your connection and try again.");
+      return;
+    }
+    const data = await response.json();
+
+    setIsGeneratingContentIdeas(false);
+    if (!response.ok) {
+      setContentIdeasError(data.error ?? "Failed to generate content ideas");
+      return;
+    }
+
+    setContentIdeas(data);
   }
 
   // Pulled out of pollCrawlJob so the same "a job just finished, go load
@@ -767,7 +811,11 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
             <CardTitle>{t("cardVerify")}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 text-sm">
-            <p className="text-muted-foreground">Prove ownership with one of the following, then check verification.</p>
+            <p className="text-muted-foreground">
+              Crawling and auditing work without this — verification is only required to connect WordPress and
+              auto-apply fixes to your live site. Prove ownership with one of the following, then check
+              verification.
+            </p>
             <div className="rounded-lg border border-white/10 bg-black/20 p-3 font-mono text-xs">
               <p>DNS TXT record:</p>
               <p>{project.dnsTxtRecordName} = {project.verificationToken}</p>
@@ -806,52 +854,50 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
 
       {activeTab === "overview" && (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          {project.isVerified && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("cardCrawl")}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3 text-sm">
-                <Button
-                  onClick={handleStartCrawl}
-                  disabled={isStartingCrawl || (crawlJob ? POLLABLE_STATUSES.has(crawlJob.status) : false)}
-                  className="self-start"
-                >
-                  {isStartingCrawl
-                    ? t("starting")
-                    : crawlJob && POLLABLE_STATUSES.has(crawlJob.status)
-                      ? t("crawling")
-                      : t("startCrawl")}
-                </Button>
-                {crawlError && <p className="text-red-400">{crawlError}</p>}
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("cardCrawl")}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 text-sm">
+              <Button
+                onClick={handleStartCrawl}
+                disabled={isStartingCrawl || (crawlJob ? POLLABLE_STATUSES.has(crawlJob.status) : false)}
+                className="self-start"
+              >
+                {isStartingCrawl
+                  ? t("starting")
+                  : crawlJob && POLLABLE_STATUSES.has(crawlJob.status)
+                    ? t("crawling")
+                    : t("startCrawl")}
+              </Button>
+              {crawlError && <p className="text-red-400">{crawlError}</p>}
 
-                {crawlJob && (
-                  <div className="flex flex-col gap-1 text-muted-foreground">
-                    <p>
-                      Status: <span className="font-medium text-foreground">{crawlJob.status}</span>
-                      {" · "}
-                      Pages crawled: {crawlJob.pageCount}
-                    </p>
-                    {crawlJob.error && <p className="text-red-400">{crawlJob.error}</p>}
-                  </div>
-                )}
+              {crawlJob && (
+                <div className="flex flex-col gap-1 text-muted-foreground">
+                  <p>
+                    Status: <span className="font-medium text-foreground">{crawlJob.status}</span>
+                    {" · "}
+                    Pages crawled: {crawlJob.pageCount}
+                  </p>
+                  {crawlJob.error && <p className="text-red-400">{crawlJob.error}</p>}
+                </div>
+              )}
 
-                {pages.length > 0 && (
-                  <div className="mt-2 flex max-h-64 flex-col gap-2 overflow-y-auto">
-                    {pages.map((page) => (
-                      <div key={page.id} className="flex items-center justify-between border-b py-1">
-                        <div>
-                          <p className="font-medium">{page.title ?? "(no title)"}</p>
-                          <p className="text-xs text-muted-foreground">{page.url}</p>
-                        </div>
-                        <span className="text-xs text-muted-foreground">{page.statusCode ?? "—"}</span>
+              {pages.length > 0 && (
+                <div className="mt-2 flex max-h-64 flex-col gap-2 overflow-y-auto">
+                  {pages.map((page) => (
+                    <div key={page.id} className="flex items-center justify-between border-b py-1">
+                      <div>
+                        <p className="font-medium">{page.title ?? "(no title)"}</p>
+                        <p className="text-xs text-muted-foreground">{page.url}</p>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                      <span className="text-xs text-muted-foreground">{page.statusCode ?? "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {auditRun && (
             <Card>
@@ -929,10 +975,57 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
             </Card>
           )}
 
-          {!project.isVerified && !auditRun && !delta && (
+          {(pages.length > 0 || contentIdeas.length > 0) && (
             <Card className="md:col-span-2">
-              <CardContent className="pt-5 text-sm text-muted-foreground">
-                Verify domain ownership above to start crawling and see results here.
+              <CardHeader>
+                <CardTitle>Content Ideas</CardTitle>
+                <CardAction>
+                  <Button onClick={handleGenerateContentIdeas} disabled={isGeneratingContentIdeas} size="sm">
+                    {isGeneratingContentIdeas
+                      ? "Generating…"
+                      : contentIdeas.length > 0
+                        ? "Regenerate"
+                        : "Generate content ideas"}
+                  </Button>
+                </CardAction>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3 text-sm">
+                <p className="text-muted-foreground">
+                  New-page ideas based on your existing pages&apos; topics — common questions people ask that this
+                  site doesn&apos;t appear to have a dedicated page for yet. These are LLM-generated ideas to
+                  consider, not measured search data or a guarantee of traffic.
+                </p>
+                {contentIdeasError && <p className="text-red-400">{contentIdeasError}</p>}
+                {contentIdeas.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    {contentIdeas.map((idea) => (
+                      <div key={idea.id} className="rounded-lg border border-white/10 bg-black/20 p-2">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                          <span className="text-xs font-medium">{idea.suggestedTitle}</span>
+                          <span className="text-xs text-muted-foreground">{idea.suggestedSlug}</span>
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground" title={idea.sourcePageUrl}>
+                          From: {idea.sourcePageUrl}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">{idea.rationale}</p>
+                        <Button
+                          className="mt-2"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(
+                              `${idea.suggestedTitle}\n${idea.suggestedSlug}\n\n${idea.rationale}`
+                            );
+                            setCopiedContentIdeaId(idea.id);
+                            setTimeout(() => setCopiedContentIdeaId((id) => (id === idea.id ? null : id)), 1500);
+                          }}
+                        >
+                          {copiedContentIdeaId === idea.id ? t("copied") : t("copy")}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -943,6 +1036,21 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
         <Card>
           <CardHeader>
             <CardTitle>{t("cardAudit")}</CardTitle>
+            {auditRun && auditRun.issues.length > 0 && (
+              <CardAction>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(formatAuditReport(project.domain, auditRun, fixCandidates));
+                    setCopiedFullReport(true);
+                    setTimeout(() => setCopiedFullReport(false), 1500);
+                  }}
+                >
+                  {copiedFullReport ? t("copied") : t("copyFullReport")}
+                </Button>
+              </CardAction>
+            )}
           </CardHeader>
           <CardContent className="flex flex-col gap-3 text-sm">
             {auditRun ? (

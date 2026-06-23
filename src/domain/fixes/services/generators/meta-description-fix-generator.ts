@@ -1,11 +1,12 @@
 import type { Page } from "@/domain/crawling/entities/page";
 import type { AuditIssue } from "@/domain/auditing/entities/audit-issue";
 import { FixCandidate } from "@/domain/fixes/entities/fix-candidate";
-import type { FixGenerator } from "@/domain/fixes/services/fix-generator";
+import type { FixGenerator, FixGeneratorContext } from "@/domain/fixes/services/fix-generator";
 import {
   META_DESCRIPTION_MAX_LENGTH,
   META_DESCRIPTION_MIN_LENGTH,
 } from "@/domain/auditing/services/rules/meta-description-length-rule";
+import type { KeywordOpportunity } from "@/domain/tracking/entities/keyword-opportunity";
 
 function truncateAtWordBoundary(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
@@ -30,10 +31,23 @@ function baseDescription(page: Page): string {
   return `${excerpt} Learn more on ${page.url.hostname}.`;
 }
 
+// Same reasoning as the title generator: a real query this page already
+// gets impressions for (just not clicks/ranking) is worth leading with,
+// since search engines weigh query-matching text in the snippet — but
+// only if the description doesn't already cover it.
+function withKeyword(description: string, opportunity: KeywordOpportunity | null): string {
+  if (!opportunity) return description;
+  if (description.toLowerCase().includes(opportunity.query.toLowerCase())) return description;
+  return `${opportunity.query}: ${description}`;
+}
+
 export const metaDescriptionFixGenerator: FixGenerator = {
   ruleIds: ["missing-meta-description", "meta-description-length"],
-  generate(page: Page, issue: AuditIssue): FixCandidate | null {
-    const content = truncateAtWordBoundary(baseDescription(page), META_DESCRIPTION_MAX_LENGTH);
+  generate(page: Page, issue: AuditIssue, context?: FixGeneratorContext): FixCandidate | null {
+    const content = truncateAtWordBoundary(
+      withKeyword(baseDescription(page), context?.topKeywordOpportunity ?? null),
+      META_DESCRIPTION_MAX_LENGTH
+    );
     return FixCandidate.createRuleBased(issue.id, page.id, "META_DESCRIPTION", content);
   },
 };

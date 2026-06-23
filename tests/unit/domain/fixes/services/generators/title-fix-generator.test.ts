@@ -3,6 +3,7 @@ import { titleFixGenerator } from "@/domain/fixes/services/generators/title-fix-
 import { AuditIssue } from "@/domain/auditing/entities/audit-issue";
 import { Page } from "@/domain/crawling/entities/page";
 import { Url } from "@/domain/crawling/value-objects/url";
+import { KeywordOpportunity } from "@/domain/tracking/entities/keyword-opportunity";
 
 function url(input: string): Url {
   const result = Url.create(input);
@@ -55,5 +56,42 @@ describe("titleFixGenerator", () => {
     const candidate = titleFixGenerator.generate(page, issue("title-length"));
     expect(candidate?.content.length).toBeLessThanOrEqual(60);
     expect(candidate?.content.endsWith(" ")).toBe(false);
+  });
+
+  it("leads with a real GSC striking-distance keyword when one is given for this page", () => {
+    const page = Page.create("job-1", url("https://example.com/widgets"), { h1: "Our Widgets" });
+    const opportunity = KeywordOpportunity.create(
+      "project-1",
+      "https://example.com/widgets",
+      "best budget widgets",
+      12,
+      300,
+      0.04,
+      14.2
+    );
+    const candidate = titleFixGenerator.generate(page, issue("title-length"), { topKeywordOpportunity: opportunity });
+    expect(candidate?.content).toContain("Best Budget Widgets");
+  });
+
+  it("doesn't restate the keyword if the existing subject already covers it", () => {
+    const page = Page.create("job-1", url("https://example.com/widgets"), { h1: "Best Budget Widgets Buying Guide" });
+    const opportunity = KeywordOpportunity.create(
+      "project-1",
+      "https://example.com/widgets",
+      "best budget widgets",
+      12,
+      300,
+      0.04,
+      14.2
+    );
+    const candidate = titleFixGenerator.generate(page, issue("title-length"), { topKeywordOpportunity: opportunity });
+    expect(candidate?.content).toBe("Best Budget Widgets Buying Guide");
+  });
+
+  it("falls back to the template-only behavior when no keyword opportunity is given", () => {
+    const page = Page.create("job-1", url("https://example.com/widgets"), { h1: "Our Widgets" });
+    const withoutContext = titleFixGenerator.generate(page, issue("title-length"));
+    const withNullOpportunity = titleFixGenerator.generate(page, issue("title-length"), { topKeywordOpportunity: null });
+    expect(withoutContext?.content).toBe(withNullOpportunity?.content);
   });
 });

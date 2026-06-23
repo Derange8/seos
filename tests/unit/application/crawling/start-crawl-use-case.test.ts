@@ -81,7 +81,7 @@ describe("StartCrawlUseCase", () => {
     expect(queue.enqueued).toHaveLength(0);
   });
 
-  it("refuses to start a crawl for an unverified domain", async () => {
+  it("allows starting a crawl for an unverified domain — crawling is read-only and doesn't need proof of ownership", async () => {
     const crawlJobRepository = new FakeCrawlJobRepository();
     const projectRepository = new FakeProjectRepository();
     const project = Project.create("Site", domain("example.com")); // not verified
@@ -91,10 +91,9 @@ describe("StartCrawlUseCase", () => {
 
     const result = await useCase.execute(project.id, url("https://example.com/"));
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("DOMAIN_NOT_VERIFIED");
-    expect(crawlJobRepository.saved).toHaveLength(0);
-    expect(queue.enqueued).toHaveLength(0);
+    expect(result.ok).toBe(true);
+    expect(crawlJobRepository.saved).toHaveLength(1);
+    expect(queue.enqueued).toHaveLength(1);
   });
 
   it("refuses to start a second crawl while one is already PENDING/RUNNING for the project", async () => {
