@@ -1,4 +1,5 @@
 import type { AuditIssueRecommendationContext, LLMPort } from "@/application/auditing/ports/llm-port";
+import { parseJsonFromLlm } from "@/infrastructure/llm/llm-json";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -82,17 +83,7 @@ export class AnthropicRecommendationProvider implements LLMPort {
   }
 
   private parseRecommendations(content: string): Map<string, string> {
-    // Claude sometimes wraps JSON in a markdown code fence even when asked
-    // not to — strip it defensively before parsing rather than failing the
-    // whole batch over formatting.
-    const stripped = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(stripped);
-    } catch {
-      throw new Error("LLM response content was not valid JSON");
-    }
+    const parsed = parseJsonFromLlm(content);
 
     const recommendations = new Map<string, string>();
     if (parsed && typeof parsed === "object") {

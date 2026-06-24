@@ -10,6 +10,11 @@ import type { ContentIdeaRepositoryPort } from "@/application/content-enrichment
 import { DomainError } from "@/shared/domain-error";
 import { err, ok, type Result } from "@/shared/result";
 
+// Bounds the single whole-site prompt (a crawl can hold up to 5000 pages).
+// This call only sends title + h1 per page, so a count cap alone keeps it
+// well inside the context window.
+const MAX_PAGES_FOR_SITE_ANALYSIS = 100;
+
 export class NoCrawledPagesError extends DomainError {
   readonly code = "NO_CRAWLED_PAGES";
 }
@@ -52,7 +57,9 @@ export class GenerateContentIdeasUseCase {
     let suggestions: ContentIdeaSuggestion[];
     try {
       suggestions = await this.deps.contentIdea.generateContentIdeas(
-        usablePages.map((page) => ({ pageUrl: page.url.href, title: page.title, h1: page.h1 }))
+        usablePages
+          .slice(0, MAX_PAGES_FOR_SITE_ANALYSIS)
+          .map((page) => ({ pageUrl: page.url.href, title: page.title, h1: page.h1 }))
       );
     } catch (error) {
       if (error instanceof NoLlmProviderConfiguredError) return err(error);

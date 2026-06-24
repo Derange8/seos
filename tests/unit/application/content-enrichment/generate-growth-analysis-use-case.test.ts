@@ -110,6 +110,23 @@ describe("GenerateGrowthAnalysisUseCase", () => {
     ]);
   });
 
+  it("caps the page count and trims each excerpt sent to the LLM for a large crawl", async () => {
+    const pages = Array.from({ length: 130 }, (_, i) =>
+      Page.create("job-1", url(`https://example.com/p${i}`), {
+        title: `Page ${i}`,
+        contentExcerpt: "x".repeat(2000),
+      })
+    );
+    const dependencies = await seededDeps(pages);
+    const useCase = new GenerateGrowthAnalysisUseCase(dependencies);
+
+    await useCase.execute("project-1");
+
+    const sent = (dependencies.growthAnalysis.generateGrowthAnalysis as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sent).toHaveLength(100);
+    expect(sent[0].contentExcerpt.length).toBe(600);
+  });
+
   it("fails with NoCrawledPagesError when the project has never been crawled", async () => {
     const useCase = new GenerateGrowthAnalysisUseCase({
       crawlJobRepository: new FakeCrawlJobRepository(),

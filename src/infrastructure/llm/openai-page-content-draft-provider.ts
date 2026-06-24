@@ -45,6 +45,9 @@ export class OpenAiPageContentDraftProvider implements PageContentDraftPort {
         ],
         response_format: { type: "json_object" },
         temperature: 0.5,
+        // Cap the completion so a long draft can't be truncated mid-JSON
+        // into an unparseable response.
+        max_tokens: 4096,
       }),
     });
 

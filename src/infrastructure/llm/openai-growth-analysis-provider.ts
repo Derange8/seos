@@ -5,6 +5,7 @@ import type {
 } from "@/application/content-enrichment/ports/growth-analysis-port";
 import { isConversionOpportunity, isGrowthOpportunity, isStringArray } from "@/domain/content-enrichment/entities/growth-analysis";
 import { GROWTH_ANALYSIS_SYSTEM_PROMPT } from "@/infrastructure/llm/growth-analysis-prompt";
+import { parseJsonFromLlm } from "@/infrastructure/llm/llm-json";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -43,6 +44,10 @@ export class OpenAiGrowthAnalysisProvider implements GrowthAnalysisPort {
         ],
         response_format: { type: "json_object" },
         temperature: 0.4,
+        // Cap the completion so the (potentially long) report can't be cut
+        // off mid-JSON by the model's default limit, which would make the
+        // response unparseable. 4k tokens comfortably fits this schema.
+        max_tokens: 4096,
       }),
     });
 
@@ -74,14 +79,7 @@ export class OpenAiGrowthAnalysisProvider implements GrowthAnalysisPort {
 // useful than none, and every field here is advisory text, not a value
 // whose absence could silently corrupt something else.
 export function parseGrowthAnalysisResult(content: string): GrowthAnalysisResult {
-  const stripped = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stripped);
-  } catch {
-    throw new Error("LLM response content was not valid JSON");
-  }
+  const parsed = parseJsonFromLlm(content);
 
   if (!parsed || typeof parsed !== "object") {
     throw new Error("LLM response content was not a JSON object");

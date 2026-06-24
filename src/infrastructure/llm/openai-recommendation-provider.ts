@@ -1,4 +1,5 @@
 import type { AuditIssueRecommendationContext, LLMPort } from "@/application/auditing/ports/llm-port";
+import { parseJsonFromLlm } from "@/infrastructure/llm/llm-json";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -89,12 +90,7 @@ export class OpenAiRecommendationProvider implements LLMPort {
   }
 
   private parseRecommendations(content: string): Map<string, string> {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      throw new Error("LLM response content was not valid JSON");
-    }
+    const parsed = parseJsonFromLlm(content);
 
     const recommendations = new Map<string, string>();
     if (parsed && typeof parsed === "object") {

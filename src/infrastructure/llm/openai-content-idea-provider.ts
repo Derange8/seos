@@ -3,6 +3,7 @@ import type {
   ContentIdeaPort,
   ContentIdeaSuggestion,
 } from "@/application/content-enrichment/ports/content-idea-port";
+import { parseJsonFromLlm } from "@/infrastructure/llm/llm-json";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -87,16 +88,8 @@ export class OpenAiContentIdeaProvider implements ContentIdeaPort {
 // extracted.
 export function parseContentIdeaSuggestions(content: string): ContentIdeaSuggestion[] {
   // Some models (and `json_object` mode specifically) wrap a requested
-  // array in a top-level object, e.g. {"ideas": [...]}  — and Claude
-  // sometimes fences the JSON in markdown despite being told not to.
-  const stripped = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stripped);
-  } catch {
-    throw new Error("LLM response content was not valid JSON");
-  }
+  // array in a top-level object, e.g. {"ideas": [...]}.
+  const parsed = parseJsonFromLlm(content);
 
   const candidates = Array.isArray(parsed)
     ? parsed
