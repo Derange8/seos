@@ -1,34 +1,33 @@
 import type {
-  GrowthAnalysisPageContext,
-  GrowthAnalysisPort,
-  GrowthAnalysisResult,
-} from "@/application/content-enrichment/ports/growth-analysis-port";
-import { parseGrowthAnalysisResult } from "@/infrastructure/llm/openai-growth-analysis-provider";
-import { GROWTH_ANALYSIS_SYSTEM_PROMPT } from "@/infrastructure/llm/growth-analysis-prompt";
+  PageContentDraftContext,
+  PageContentDraftPort,
+  PageContentDraftResult,
+} from "@/application/content-enrichment/ports/page-content-draft-port";
+import {
+  PAGE_CONTENT_DRAFT_SYSTEM_PROMPT,
+  parsePageContentDraftResult,
+} from "@/infrastructure/llm/page-content-draft-prompt";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const DEFAULT_MODEL = "claude-3-5-haiku-latest";
-const MAX_TOKENS = 8192;
+const MAX_TOKENS = 4096;
 
-interface AnthropicGrowthAnalysisProviderOptions {
+interface AnthropicPageContentDraftProviderOptions {
   apiKey: string;
   model?: string;
 }
 
-// Same GrowthAnalysisPort contract as OpenAiGrowthAnalysisProvider, against
-// Anthropic's Messages API instead — same request/response envelope
-// distinction as the other Anthropic providers in this codebase.
-export class AnthropicGrowthAnalysisProvider implements GrowthAnalysisPort {
+export class AnthropicPageContentDraftProvider implements PageContentDraftPort {
   private readonly apiKey: string;
   private readonly model: string;
 
-  constructor(options: AnthropicGrowthAnalysisProviderOptions) {
+  constructor(options: AnthropicPageContentDraftProviderOptions) {
     this.apiKey = options.apiKey;
     this.model = options.model ?? DEFAULT_MODEL;
   }
 
-  async generateGrowthAnalysis(pages: readonly GrowthAnalysisPageContext[]): Promise<GrowthAnalysisResult> {
+  async generateDraft(context: PageContentDraftContext): Promise<PageContentDraftResult> {
     const response = await fetch(ANTHROPIC_API_URL, {
       method: "POST",
       headers: {
@@ -39,8 +38,8 @@ export class AnthropicGrowthAnalysisProvider implements GrowthAnalysisPort {
       body: JSON.stringify({
         model: this.model,
         max_tokens: MAX_TOKENS,
-        system: GROWTH_ANALYSIS_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: JSON.stringify(pages) }],
+        system: PAGE_CONTENT_DRAFT_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: JSON.stringify(context) }],
       }),
     });
 
@@ -50,16 +49,11 @@ export class AnthropicGrowthAnalysisProvider implements GrowthAnalysisPort {
     }
 
     const data: unknown = await response.json();
-    const content = this.extractContent(data);
-    return parseGrowthAnalysisResult(content);
-  }
-
-  private extractContent(data: unknown): string {
     const blocks = (data as { content?: { type?: string; text?: unknown }[] })?.content;
     const text = blocks?.find((block) => block.type === "text")?.text;
     if (typeof text !== "string") {
       throw new Error("LLM response did not contain message content");
     }
-    return text;
+    return parsePageContentDraftResult(text);
   }
 }

@@ -5,6 +5,11 @@ import type {
   GrowthAnalysis,
   GrowthOpportunity,
 } from "@/domain/content-enrichment/entities/growth-analysis";
+import type {
+  DraftBodySection,
+  DraftFaq,
+  PageContentDraft,
+} from "@/domain/content-enrichment/entities/page-content-draft";
 
 export interface ContentSuggestionDto {
   keywordOpportunityId: string;
@@ -65,5 +70,25 @@ export function toGrowthAnalysisDto(analysis: GrowthAnalysis): GrowthAnalysisDto
     topPages: analysis.topPages,
     executiveSummary: analysis.executiveSummary,
     generatedAt: analysis.generatedAt.toISOString(),
+  };
+}
+
+export interface PageContentDraftDto {
+  pageUrl: string;
+  suggestedTitle: string;
+  suggestedMetaDescription: string;
+  bodySections: readonly DraftBodySection[];
+  faqs: readonly DraftFaq[];
+  generatedAt: string;
+}
+
+export function toPageContentDraftDto(draft: PageContentDraft): PageContentDraftDto {
+  return {
+    pageUrl: draft.pageUrl,
+    suggestedTitle: draft.suggestedTitle,
+    suggestedMetaDescription: draft.suggestedMetaDescription,
+    bodySections: draft.bodySections,
+    faqs: draft.faqs,
+    generatedAt: draft.generatedAt.toISOString(),
   };
 }

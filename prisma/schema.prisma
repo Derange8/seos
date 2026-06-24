@@ -38,6 +38,7 @@ model Project {
   pagePerformance      PagePerformance[]
   contentIdeas         ContentIdea[]
   growthAnalysis       GrowthAnalysis?
+  pageContentDrafts    PageContentDraft[]
   createdAt            DateTime                    @default(now())
 
   @@map("projects")
@@ -563,4 +564,30 @@ model GrowthAnalysis {
   generatedAt             DateTime @default(now())
 
   @@map("growth_analyses")
+}
+
+// Ready-to-publish draft content for a SINGLE crawled page — turns a growth
+// gap (e.g. "this product page has no FAQ / doesn't explain what it does")
+// into a usable asset the owner can paste in. Generated on demand per page
+// (a real LLM call), never automatically. Self-contained: derived only from
+// the page's own crawled content, no GSC/search data — so it works on any
+// site, even one with no Google connection. One row per (project, page) —
+// regenerating overwrites it.
+model PageContentDraft {
+  id                       String   @id @default(cuid())
+  projectId                String
+  project                  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pageUrl                  String
+  suggestedTitle           String
+  suggestedMetaDescription String
+  // Array of { heading, content } — see PageContentDraft in
+  // src/domain/content-enrichment/entities/page-content-draft.ts.
+  bodySections             Json     @default("[]")
+  // Array of { question, answer }.
+  faqs                     Json     @default("[]")
+  generatedAt              DateTime @default(now())
+
+  @@unique([projectId, pageUrl])
+  @@index([projectId])
+  @@map("page_content_drafts")
 }

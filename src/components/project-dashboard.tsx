@@ -21,7 +21,7 @@ import type { FixCandidateDto } from "@/application/fixes/dto";
 import type { AuditDeltaDto } from "@/application/delta-audit/dto";
 import type { WordPressConnectionDto } from "@/application/wordpress/dto";
 import type { SearchPerformanceSnapshotDto, AnalyticsSnapshotDto, KeywordOpportunityDto } from "@/application/tracking/dto";
-import type { ContentIdeaDto, GrowthAnalysisDto } from "@/application/content-enrichment/dto";
+import type { ContentIdeaDto, GrowthAnalysisDto, PageContentDraftDto } from "@/application/content-enrichment/dto";
 import { formatAuditReport } from "@/lib/format-audit-report";
 
 type KeywordOpportunityRow = KeywordOpportunityDto & { suggestion: string | null };
@@ -216,6 +216,12 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [isGeneratingGrowthAnalysis, setIsGeneratingGrowthAnalysis] = useState(false);
   const [growthAnalysisError, setGrowthAnalysisError] = useState<string | null>(null);
 
+  const [contentDrafts, setContentDrafts] = useState<PageContentDraftDto[]>([]);
+  const [draftPageUrl, setDraftPageUrl] = useState("");
+  const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [copiedDraftUrl, setCopiedDraftUrl] = useState<string | null>(null);
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -259,6 +265,13 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       .then((response) => (response.ok ? response.json() : null))
       .then((data: GrowthAnalysisDto | null) => setGrowthAnalysis(data))
       .catch((error: unknown) => console.error("Failed to fetch growth analysis", error));
+  }, [project.id]);
+
+  useEffect(() => {
+    fetch(`/api/v1/projects/${project.id}/content-draft`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data: PageContentDraftDto[]) => setContentDrafts(data))
+      .catch((error: unknown) => console.error("Failed to fetch content drafts", error));
   }, [project.id]);
 
   // Surfaces any past domain-event-handler failures (e.g. score
@@ -439,6 +452,49 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     }
 
     setGrowthAnalysis(data);
+  }
+
+  async function handleGenerateDraft(pageUrl: string) {
+    if (!pageUrl) return;
+    setGeneratingDraft(true);
+    setDraftError(null);
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${project.id}/content-draft`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pageUrl }),
+      });
+    } catch {
+      setGeneratingDraft(false);
+      setDraftError("Network error — check your connection and try again.");
+      return;
+    }
+    const data = await response.json();
+
+    setGeneratingDraft(false);
+    if (!response.ok) {
+      setDraftError(data.error ?? "Failed to generate the content draft");
+      return;
+    }
+
+    // Replace any existing draft for this page, else prepend the new one.
+    setContentDrafts((drafts) => [data, ...drafts.filter((d) => d.pageUrl !== data.pageUrl)]);
+  }
+
+  function formatDraftForCopy(draft: PageContentDraftDto): string {
+    const sections = draft.bodySections.map((s) => `## ${s.heading}\n${s.content}`).join("\n\n");
+    const faqs = draft.faqs.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
+    return [
+      `Title: ${draft.suggestedTitle}`,
+      `Meta description: ${draft.suggestedMetaDescription}`,
+      "",
+      sections,
+      "",
+      "FAQ",
+      faqs,
+    ].join("\n");
   }
 
   // Pulled out of pollCrawlJob so the same "a job just finished, go load
@@ -1393,6 +1449,93 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
               </Card>
             </div>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Page Content Draft</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 text-sm">
+              <p className="text-muted-foreground">
+                Generate ready-to-publish content for a crawled page — a suggested title, meta description, body
+                sections, and a full FAQ, in the page&apos;s own language, grounded in the page&apos;s real content.
+                Turns a content gap into something you can paste straight in.
+              </p>
+              {pages.length === 0 ? (
+                <p className="text-muted-foreground">Run a crawl from the Overview tab first.</p>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={draftPageUrl}
+                    onChange={(e) => setDraftPageUrl(e.target.value)}
+                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-xs"
+                  >
+                    <option value="">Select a page…</option>
+                    {pages.map((page) => (
+                      <option key={page.id} value={page.url}>
+                        {page.title ? `${page.title} — ${page.url}` : page.url}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    onClick={() => handleGenerateDraft(draftPageUrl)}
+                    disabled={generatingDraft || !draftPageUrl}
+                    size="sm"
+                  >
+                    {generatingDraft ? "Writing…" : "Generate draft"}
+                  </Button>
+                </div>
+              )}
+              {draftError && <p className="text-red-400">{draftError}</p>}
+            </CardContent>
+          </Card>
+
+          {contentDrafts.map((draft) => (
+            <Card key={draft.pageUrl}>
+              <CardHeader>
+                <CardTitle className="truncate" title={draft.pageUrl}>
+                  Draft · {draft.pageUrl}
+                </CardTitle>
+                <CardAction>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(formatDraftForCopy(draft));
+                      setCopiedDraftUrl(draft.pageUrl);
+                      setTimeout(() => setCopiedDraftUrl((u) => (u === draft.pageUrl ? null : u)), 1500);
+                    }}
+                  >
+                    {copiedDraftUrl === draft.pageUrl ? t("copied") : t("copy")}
+                  </Button>
+                </CardAction>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3 text-sm">
+                <div className="rounded-lg border border-white/10 bg-black/20 p-2">
+                  <p className="text-xs text-muted-foreground">Title</p>
+                  <p>{draft.suggestedTitle}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Meta description</p>
+                  <p>{draft.suggestedMetaDescription}</p>
+                </div>
+                {draft.bodySections.map((section, index) => (
+                  <div key={index}>
+                    <p className="font-medium">{section.heading}</p>
+                    <p className="text-muted-foreground whitespace-pre-wrap">{section.content}</p>
+                  </div>
+                ))}
+                {draft.faqs.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <p className="font-medium">FAQ</p>
+                    {draft.faqs.map((faq, index) => (
+                      <div key={index} className="rounded-lg border border-white/10 bg-black/20 p-2">
+                        <p className="text-xs font-medium">{faq.question}</p>
+                        <p className="text-xs text-muted-foreground">{faq.answer}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 

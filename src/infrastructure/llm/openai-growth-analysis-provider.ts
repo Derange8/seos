@@ -4,37 +4,10 @@ import type {
   GrowthAnalysisResult,
 } from "@/application/content-enrichment/ports/growth-analysis-port";
 import { isConversionOpportunity, isGrowthOpportunity, isStringArray } from "@/domain/content-enrichment/entities/growth-analysis";
+import { GROWTH_ANALYSIS_SYSTEM_PROMPT } from "@/infrastructure/llm/growth-analysis-prompt";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4o-mini";
-
-const SYSTEM_PROMPT =
-  "You are an SEO Growth Analyst. Your job is NOT a technical SEO audit (title length, meta " +
-  "tags, schema markup, etc.) — focus entirely on business growth opportunities: content " +
-  "gaps, missing pages, conversion weaknesses, and what a customer would search before " +
-  "purchasing. You'll be given every crawled page of a website: its URL, title, H1, a content " +
-  "excerpt, and how many FAQ entries were detected on it.\n\n" +
-  "Hard rules:\n" +
-  "- Never invent search volume, ranking positions, traffic estimates, or competition/" +
-  "difficulty scores — you have no real data source for these. If you would normally cite a " +
-  "number, state the assumption in words instead.\n" +
-  "- Base every claim on the actual page data given to you, not generic assumptions about " +
-  "this business category.\n" +
-  "- Reason about the whole site as one business, not page by page — look for catalog-level " +
-  "gaps (e.g. two products serving the same need with no comparison/bundle page between " +
-  "them), not just isolated per-page issues.\n" +
-  "- Write in the same language as the pages' own titles/H1s.\n\n" +
-  "Respond ONLY with a JSON object shaped exactly like this, no other text, no markdown, no " +
-  "code fences:\n" +
-  '{"businessUnderstanding": string, "contentGapsSummary": string, ' +
-  '"opportunities": [{"title": string, "searchIntent": string, "whyUsersSearch": string, ' +
-  '"whyRevenue": string, "suggestedSlug": string, ' +
-  '"pageType": "PRODUCT"|"LANDING"|"CATEGORY"|"COMPARISON"|"BLOG_ARTICLE"|"FAQ", ' +
-  '"priority": "HIGH"|"MEDIUM"|"LOW"}, ...] (aim for 6-10), ' +
-  '"conversionOpportunities": [{"pageUrl": string, "recommendation": string}, ...], ' +
-  '"missingCompetitorPages": [string, ...], ' +
-  '"topPages": [string, ...] (ranked highest-impact first, up to 10), ' +
-  '"executiveSummary": string (top 3 actions for next month, as plain text)}';
 
 interface OpenAiGrowthAnalysisProviderOptions {
   apiKey: string;
@@ -65,7 +38,7 @@ export class OpenAiGrowthAnalysisProvider implements GrowthAnalysisPort {
       body: JSON.stringify({
         model: this.model,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: GROWTH_ANALYSIS_SYSTEM_PROMPT },
           { role: "user", content: JSON.stringify(pages) },
         ],
         response_format: { type: "json_object" },
