@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CheerioHtmlParser } from "@/infrastructure/html/cheerio-html-parser";
+import { CheerioHtmlParser, EXCERPT_LENGTH } from "@/infrastructure/html/cheerio-html-parser";
 import { Url } from "@/domain/crawling/value-objects/url";
 
 function url(input: string): Url {
@@ -90,9 +90,9 @@ describe("CheerioHtmlParser", () => {
   });
 
   it("truncates the excerpt rather than keeping the whole body", () => {
-    const longText = "word ".repeat(200).trim();
+    const longText = "word ".repeat(1000).trim();
     const result = parser.parse(`<body><p>${longText}</p></body>`, baseUrl);
-    expect(result.contentExcerpt?.length).toBeLessThanOrEqual(300);
+    expect(result.contentExcerpt?.length).toBeLessThanOrEqual(EXCERPT_LENGTH);
     expect(result.contentExcerpt?.length).toBeLessThan(longText.length);
   });
 

@@ -21,7 +21,7 @@ import type { FixCandidateDto } from "@/application/fixes/dto";
 import type { AuditDeltaDto } from "@/application/delta-audit/dto";
 import type { WordPressConnectionDto } from "@/application/wordpress/dto";
 import type { SearchPerformanceSnapshotDto, AnalyticsSnapshotDto, KeywordOpportunityDto } from "@/application/tracking/dto";
-import type { ContentIdeaDto } from "@/application/content-enrichment/dto";
+import type { ContentIdeaDto, GrowthAnalysisDto } from "@/application/content-enrichment/dto";
 import { formatAuditReport } from "@/lib/format-audit-report";
 
 type KeywordOpportunityRow = KeywordOpportunityDto & { suggestion: string | null };
@@ -59,10 +59,11 @@ const POLL_INTERVAL_MS = 1000;
 // big issue list from burying Outputs/Integrations far down the page —
 // the exact complaint that prompted this. Pure presentation: no fetching
 // or state logic changes based on which tab is active.
-type TabId = "overview" | "issues" | "integrations" | "outputs";
+type TabId = "overview" | "issues" | "growth" | "integrations" | "outputs";
 const TABS: Array<{ id: TabId; key: TranslationKey }> = [
   { id: "overview", key: "tabOverview" },
   { id: "issues", key: "tabIssues" },
+  { id: "growth", key: "tabGrowth" },
   { id: "integrations", key: "tabIntegrations" },
   { id: "outputs", key: "tabOutputs" },
 ];
@@ -80,6 +81,7 @@ const TRANSLATIONS = {
   unverified: { en: "Unverified", tr: "Doğrulanmadı" },
   tabOverview: { en: "Overview", tr: "Genel Bakış" },
   tabIssues: { en: "Issues & Fixes", tr: "Sorunlar & Düzeltmeler" },
+  tabGrowth: { en: "Growth", tr: "Büyüme" },
   tabIntegrations: { en: "Integrations", tr: "Entegrasyonlar" },
   tabOutputs: { en: "Outputs", tr: "Çıktılar" },
   cardCrawl: { en: "Crawl", tr: "Tarama" },
@@ -137,6 +139,14 @@ const PRIORITY_TIER_LABEL: Record<string, string> = {
   MANUAL_REVIEW: "Needs review",
   FILL_IN: "Fill-in",
   LOW_PRIORITY: "Low priority",
+};
+
+const PRIORITY_ORDER: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+
+const PRIORITY_BADGE_VARIANT: Record<string, "default" | "secondary" | "destructive"> = {
+  HIGH: "destructive",
+  MEDIUM: "default",
+  LOW: "secondary",
 };
 
 const EVENT_TYPE_LABEL: Record<string, string> = {
@@ -202,6 +212,10 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [contentIdeasError, setContentIdeasError] = useState<string | null>(null);
   const [copiedContentIdeaId, setCopiedContentIdeaId] = useState<string | null>(null);
 
+  const [growthAnalysis, setGrowthAnalysis] = useState<GrowthAnalysisDto | null>(null);
+  const [isGeneratingGrowthAnalysis, setIsGeneratingGrowthAnalysis] = useState(false);
+  const [growthAnalysisError, setGrowthAnalysisError] = useState<string | null>(null);
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -235,6 +249,16 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       .then((response) => (response.ok ? response.json() : []))
       .then((data: ContentIdeaDto[]) => setContentIdeas(data))
       .catch((error: unknown) => console.error("Failed to fetch content ideas", error));
+  }, [project.id]);
+
+  // Same reasoning as content ideas above — a business-growth report has
+  // no dependency on Google being connected, it's derived purely from the
+  // crawl, so it's fetched unconditionally on mount.
+  useEffect(() => {
+    fetch(`/api/v1/projects/${project.id}/growth-analysis`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: GrowthAnalysisDto | null) => setGrowthAnalysis(data))
+      .catch((error: unknown) => console.error("Failed to fetch growth analysis", error));
   }, [project.id]);
 
   // Surfaces any past domain-event-handler failures (e.g. score
@@ -392,6 +416,29 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     }
 
     setContentIdeas(data);
+  }
+
+  async function handleGenerateGrowthAnalysis() {
+    setIsGeneratingGrowthAnalysis(true);
+    setGrowthAnalysisError(null);
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${project.id}/growth-analysis`, { method: "POST" });
+    } catch {
+      setIsGeneratingGrowthAnalysis(false);
+      setGrowthAnalysisError("Network error — check your connection and try again.");
+      return;
+    }
+    const data = await response.json();
+
+    setIsGeneratingGrowthAnalysis(false);
+    if (!response.ok) {
+      setGrowthAnalysisError(data.error ?? "Failed to generate the growth analysis");
+      return;
+    }
+
+    setGrowthAnalysis(data);
   }
 
   // Pulled out of pollCrawlJob so the same "a job just finished, go load
@@ -626,31 +673,61 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   }
 
   async function handleSelectGscSite(gscSiteUrl: string) {
-    const response = await fetch(`/api/v1/projects/${project.id}/google/site`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ gscSiteUrl }),
-    });
-    if (response.ok) setGoogleStatus(await response.json());
+    setGoogleError(null);
+    try {
+      const response = await fetch(`/api/v1/projects/${project.id}/google/site`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ gscSiteUrl }),
+      });
+      if (response.ok) {
+        setGoogleStatus(await response.json());
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setGoogleError(data.error ?? "Failed to select the Search Console property");
+      }
+    } catch {
+      setGoogleError("Network error — check your connection and try again.");
+    }
   }
 
   async function handleSaveGa4Property(event: React.FormEvent) {
     event.preventDefault();
-    const response = await fetch(`/api/v1/projects/${project.id}/google/ga4-property`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ga4PropertyId: ga4PropertyIdInput }),
-    });
-    if (response.ok) setGoogleStatus(await response.json());
+    setGoogleError(null);
+    try {
+      const response = await fetch(`/api/v1/projects/${project.id}/google/ga4-property`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ga4PropertyId: ga4PropertyIdInput }),
+      });
+      if (response.ok) {
+        setGoogleStatus(await response.json());
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setGoogleError(data.error ?? "Failed to save the GA4 property id");
+      }
+    } catch {
+      setGoogleError("Network error — check your connection and try again.");
+    }
   }
 
   async function handleToggleAutoRefresh(enabled: boolean) {
-    const response = await fetch(`/api/v1/projects/${project.id}/google/auto-refresh`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ enabled }),
-    });
-    if (response.ok) setGoogleStatus(await response.json());
+    setGoogleError(null);
+    try {
+      const response = await fetch(`/api/v1/projects/${project.id}/google/auto-refresh`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      if (response.ok) {
+        setGoogleStatus(await response.json());
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setGoogleError(data.error ?? "Failed to update auto-refresh");
+      }
+    } catch {
+      setGoogleError("Network error — check your connection and try again.");
+    }
   }
 
   async function handleRefreshGoogleTracking() {
@@ -1187,6 +1264,136 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
             )}
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === "growth" && (
+        <div className="flex flex-col gap-5">
+          <Card>
+            <CardHeader>
+              <CardTitle>Growth Analysis</CardTitle>
+              <CardAction>
+                <Button onClick={handleGenerateGrowthAnalysis} disabled={isGeneratingGrowthAnalysis} size="sm">
+                  {isGeneratingGrowthAnalysis
+                    ? "Analyzing…"
+                    : growthAnalysis
+                      ? "Regenerate"
+                      : "Generate growth analysis"}
+                </Button>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 text-sm">
+              <p className="text-muted-foreground">
+                A business-growth read of your whole site — not a technical audit. Identifies missing content,
+                weak conversion pages, and new pages worth writing, reasoned from your crawled pages as one
+                business. LLM-generated ideas to consider, not measured search data or a traffic guarantee.
+              </p>
+              {growthAnalysisError && <p className="text-red-400">{growthAnalysisError}</p>}
+              {!growthAnalysis && !growthAnalysisError && (
+                <p className="text-muted-foreground">No analysis generated yet for this project.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {growthAnalysis && (
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Business Understanding</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{growthAnalysis.businessUnderstanding}</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Content Coverage Gaps</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{growthAnalysis.contentGapsSummary}</p>
+                </CardContent>
+              </Card>
+
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle>High-Impact Content Opportunities</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-2 text-sm">
+                  {[...growthAnalysis.opportunities]
+                    .sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])
+                    .map((opportunity, index) => (
+                      <div key={index} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                          <span className="font-medium">{opportunity.title}</span>
+                          <Badge variant={PRIORITY_BADGE_VARIANT[opportunity.priority] ?? "secondary"}>
+                            {opportunity.priority}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {opportunity.pageType} · {opportunity.suggestedSlug} · Intent: {opportunity.searchIntent}
+                        </p>
+                        <p className="mt-1 text-xs">{opportunity.whyUsersSearch}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Revenue case: {opportunity.whyRevenue}</p>
+                      </div>
+                    ))}
+                </CardContent>
+              </Card>
+
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle>Conversion Opportunities on Existing Pages</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-2 text-sm">
+                  {growthAnalysis.conversionOpportunities.map((item, index) => (
+                    <div key={index} className="rounded-lg border border-white/10 bg-black/20 p-2">
+                      <p className="truncate text-xs text-muted-foreground" title={item.pageUrl}>
+                        {item.pageUrl}
+                      </p>
+                      <p className="text-xs">{item.recommendation}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Competitor-Like Pages Missing</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
+                    {growthAnalysis.missingCompetitorPages.map((item, index) => (
+                      <li key={index}>• {item}</li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Next 10 Pages To Create</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ol className="flex flex-col gap-1 text-sm text-muted-foreground">
+                    {growthAnalysis.topPages.map((item, index) => (
+                      <li key={index}>
+                        {index + 1}. {item}
+                      </li>
+                    ))}
+                  </ol>
+                </CardContent>
+              </Card>
+
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle>Executive Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm whitespace-pre-wrap">{growthAnalysis.executiveSummary}</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
       )}
 
       {activeTab === "integrations" && (

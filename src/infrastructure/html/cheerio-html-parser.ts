@@ -4,7 +4,12 @@ import type { HtmlParserPort, ParsedPageContent } from "@/application/crawling/p
 import type { Faq } from "@/domain/crawling/entities/page";
 import type { Url } from "@/domain/crawling/value-objects/url";
 
-const EXCERPT_LENGTH = 300;
+// Long enough to give the growth-analysis LLM call (which reasons about a
+// whole page's content — pricing, FAQ presence, claims) real material to
+// work with, not just a meta-description-length snippet. The meta-
+// description fix generator already truncates further as needed, so a
+// larger excerpt only ever helps it, never hurts.
+export const EXCERPT_LENGTH = 1500;
 // normalizeWhitespace (below) collapses any run of whitespace — including
 // multiple inserted newlines — down to a single space, so there's no
 // downside to covering every closing tag here rather than hand-picking

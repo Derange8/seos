@@ -37,6 +37,7 @@ model Project {
   keywordOpportunities KeywordOpportunity[]
   pagePerformance      PagePerformance[]
   contentIdeas         ContentIdea[]
+  growthAnalysis       GrowthAnalysis?
   createdAt            DateTime                    @default(now())
 
   @@map("projects")
@@ -531,4 +532,35 @@ model ContentIdea {
 
   @@index([projectId])
   @@map("content_ideas")
+}
+
+// Site-wide business-growth report (NOT a technical audit) — one LLM call
+// reasoning over every crawled page's title/h1/content excerpt/FAQ count at
+// once, so it can spot catalog-level gaps (e.g. "two products solve the
+// same need but there's no bundle page") a per-page call structurally can't
+// see. Same anti-fabrication stance as ContentIdea: no real search-volume
+// API is wired in, so this never claims search-volume/ranking numbers —
+// opportunities are framed as reasoned ideas, not verified data. One row
+// per project (`projectId` unique) — regenerating overwrites it, there's no
+// history, since only the latest reflects the current crawl.
+model GrowthAnalysis {
+  id                      String   @id @default(cuid())
+  projectId               String   @unique
+  project                 Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  businessUnderstanding   String
+  contentGapsSummary      String
+  // Array of { title, searchIntent, whyUsersSearch, whyRevenue,
+  // suggestedSlug, pageType, priority } — see GrowthOpportunity in
+  // src/domain/content-enrichment/entities/growth-analysis.ts.
+  opportunities           Json     @default("[]")
+  // Array of { pageUrl, recommendation }.
+  conversionOpportunities Json     @default("[]")
+  // Array of plain description strings.
+  missingCompetitorPages  Json     @default("[]")
+  // Array of plain description strings, ranked highest-impact first.
+  topPages                Json     @default("[]")
+  executiveSummary        String
+  generatedAt             DateTime @default(now())
+
+  @@map("growth_analyses")
 }
