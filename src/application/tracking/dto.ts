@@ -2,6 +2,8 @@ import type { GoogleConnection } from "@/domain/tracking/entities/google-connect
 import type { SearchPerformanceSnapshot } from "@/domain/tracking/entities/search-performance-snapshot";
 import type { AnalyticsSnapshot } from "@/domain/tracking/entities/analytics-snapshot";
 import type { KeywordOpportunity } from "@/domain/tracking/entities/keyword-opportunity";
+import type { CannibalizingPage, KeywordCannibalizationIssue } from "@/domain/tracking/entities/keyword-cannibalization";
+import type { CtrUnderperformer } from "@/domain/tracking/entities/ctr-underperformer";
 
 export interface GoogleConnectionDto {
   connected: true;
@@ -74,5 +76,43 @@ export function toKeywordOpportunityDto(opportunity: KeywordOpportunity): Keywor
     impressions: opportunity.impressions,
     ctr: opportunity.ctr,
     position: opportunity.position,
+  };
+}
+
+export interface KeywordCannibalizationIssueDto {
+  id: string;
+  query: string;
+  pages: readonly CannibalizingPage[];
+}
+
+export function toKeywordCannibalizationIssueDto(issue: KeywordCannibalizationIssue): KeywordCannibalizationIssueDto {
+  return {
+    id: issue.id,
+    query: issue.query,
+    pages: issue.pages,
+  };
+}
+
+export interface CtrUnderperformerDto {
+  id: string;
+  pageUrl: string;
+  query: string;
+  position: number;
+  ctr: number;
+  expectedCtr: number;
+  clicks: number;
+  impressions: number;
+}
+
+export function toCtrUnderperformerDto(issue: CtrUnderperformer): CtrUnderperformerDto {
+  return {
+    id: issue.id,
+    pageUrl: issue.pageUrl,
+    query: issue.query,
+    position: issue.position,
+    ctr: issue.ctr,
+    expectedCtr: issue.expectedCtr,
+    clicks: issue.clicks,
+    impressions: issue.impressions,
   };
 }

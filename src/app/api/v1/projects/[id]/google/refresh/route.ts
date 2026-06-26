@@ -4,6 +4,8 @@ import { PrismaGoogleConnectionRepository } from "@/infrastructure/persistence/p
 import { PrismaSearchPerformanceRepository } from "@/infrastructure/persistence/prisma/prisma-search-performance-repository";
 import { PrismaAnalyticsSnapshotRepository } from "@/infrastructure/persistence/prisma/prisma-analytics-snapshot-repository";
 import { PrismaKeywordOpportunityRepository } from "@/infrastructure/persistence/prisma/prisma-keyword-opportunity-repository";
+import { PrismaKeywordCannibalizationRepository } from "@/infrastructure/persistence/prisma/prisma-keyword-cannibalization-repository";
+import { PrismaCtrUnderperformerRepository } from "@/infrastructure/persistence/prisma/prisma-ctr-underperformer-repository";
 import { PrismaPagePerformanceRepository } from "@/infrastructure/persistence/prisma/prisma-page-performance-repository";
 import { PrismaContentSuggestionRepository } from "@/infrastructure/persistence/prisma/prisma-content-suggestion-repository";
 import { SearchConsoleClient } from "@/infrastructure/google/search-console-client";
@@ -12,7 +14,7 @@ import { createGoogleOAuthClient } from "@/infrastructure/google/create-google-o
 import { FetchSearchPerformanceUseCase } from "@/application/tracking/use-cases/fetch-search-performance-use-case";
 import { FetchAnalyticsUseCase, Ga4PropertyNotConfiguredError } from "@/application/tracking/use-cases/fetch-analytics-use-case";
 import { FetchKeywordOpportunitiesUseCase } from "@/application/tracking/use-cases/fetch-keyword-opportunities-use-case";
-import { toSearchPerformanceSnapshotDto, toAnalyticsSnapshotDto, toKeywordOpportunityDto } from "@/application/tracking/dto";
+import { toSearchPerformanceSnapshotDto, toAnalyticsSnapshotDto, toKeywordOpportunityDto, toKeywordCannibalizationIssueDto, toCtrUnderperformerDto } from "@/application/tracking/dto";
 import { requireProjectAccess } from "@/infrastructure/auth/require-project-access";
 
 // GSC and GA4 are independent — a missing GA4 property shouldn't prevent
@@ -54,6 +56,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     googleConnectionRepository,
     keywordOpportunityRepository: new PrismaKeywordOpportunityRepository(prisma),
     pagePerformanceRepository: new PrismaPagePerformanceRepository(prisma),
+    keywordCannibalizationRepository: new PrismaKeywordCannibalizationRepository(prisma),
+    ctrUnderperformerRepository: new PrismaCtrUnderperformerRepository(prisma),
   }).execute(projectId);
 
   // A re-fetched opportunity keeps the same id (upsert by pageUrl+query,
@@ -84,11 +88,17 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     keywordOpportunities: keywordOpportunitiesResult.ok
       ? {
           status: "ok",
-          opportunities: keywordOpportunitiesResult.value.map((opportunity) => ({
+          opportunities: keywordOpportunitiesResult.value.opportunities.map((opportunity) => ({
             ...toKeywordOpportunityDto(opportunity),
             suggestion: suggestionByOpportunityId.get(opportunity.id) ?? null,
           })),
         }
+      : { status: "error", error: keywordOpportunitiesResult.error.message, code: keywordOpportunitiesResult.error.code },
+    keywordCannibalization: keywordOpportunitiesResult.ok
+      ? { status: "ok", issues: keywordOpportunitiesResult.value.cannibalizationIssues.map(toKeywordCannibalizationIssueDto) }
+      : { status: "error", error: keywordOpportunitiesResult.error.message, code: keywordOpportunitiesResult.error.code },
+    ctrUnderperformers: keywordOpportunitiesResult.ok
+      ? { status: "ok", issues: keywordOpportunitiesResult.value.ctrUnderperformers.map(toCtrUnderperformerDto) }
       : { status: "error", error: keywordOpportunitiesResult.error.message, code: keywordOpportunitiesResult.error.code },
   });
 }

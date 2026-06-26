@@ -10,6 +10,8 @@ import type { GoogleOAuthPort } from "@/application/tracking/ports/google-oauth-
 import type { PageQueryPerformance, SearchConsoleClientPort } from "@/application/tracking/ports/search-console-client-port";
 import type { GoogleConnectionRepositoryPort } from "@/application/tracking/ports/google-connection-repository-port";
 import type { KeywordOpportunityRepositoryPort } from "@/application/tracking/ports/keyword-opportunity-repository-port";
+import type { KeywordCannibalizationRepositoryPort } from "@/application/tracking/ports/keyword-cannibalization-repository-port";
+import type { CtrUnderperformerRepositoryPort } from "@/application/tracking/ports/ctr-underperformer-repository-port";
 import type { PagePerformanceRepositoryPort } from "@/application/tracking/ports/page-performance-repository-port";
 
 function connectionWith(gscSiteUrl: string | null): GoogleConnection {
@@ -32,6 +34,8 @@ function deps(
     googleConnectionRepository: GoogleConnectionRepositoryPort;
     keywordOpportunityRepository: KeywordOpportunityRepositoryPort;
     pagePerformanceRepository: PagePerformanceRepositoryPort;
+    keywordCannibalizationRepository: KeywordCannibalizationRepositoryPort;
+    ctrUnderperformerRepository: CtrUnderperformerRepositoryPort;
   }> = {}
 ) {
   const googleOAuth: GoogleOAuthPort =
@@ -63,7 +67,25 @@ function deps(
       saveMany: vi.fn().mockResolvedValue(undefined),
       findByProjectId: vi.fn(),
     };
-  return { googleOAuth, searchConsoleClient, googleConnectionRepository, keywordOpportunityRepository, pagePerformanceRepository };
+  const keywordCannibalizationRepository: KeywordCannibalizationRepositoryPort =
+    overrides.keywordCannibalizationRepository ?? {
+      replaceForProject: vi.fn().mockResolvedValue(undefined),
+      findByProjectId: vi.fn(),
+    };
+  const ctrUnderperformerRepository: CtrUnderperformerRepositoryPort =
+    overrides.ctrUnderperformerRepository ?? {
+      replaceForProject: vi.fn().mockResolvedValue(undefined),
+      findByProjectId: vi.fn(),
+    };
+  return {
+    googleOAuth,
+    searchConsoleClient,
+    googleConnectionRepository,
+    keywordOpportunityRepository,
+    pagePerformanceRepository,
+    keywordCannibalizationRepository,
+    ctrUnderperformerRepository,
+  };
 }
 
 describe("FetchKeywordOpportunitiesUseCase", () => {
@@ -75,9 +97,9 @@ describe("FetchKeywordOpportunitiesUseCase", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value).toHaveLength(1);
-      expect(result.value[0].query).toBe("best widgets");
-      expect(result.value[0].pageUrl).toBe("https://example.com/blog/widgets");
+      expect(result.value.opportunities).toHaveLength(1);
+      expect(result.value.opportunities[0].query).toBe("best widgets");
+      expect(result.value.opportunities[0].pageUrl).toBe("https://example.com/blog/widgets");
     }
     expect(dependencies.keywordOpportunityRepository.saveMany).toHaveBeenCalledTimes(1);
   });
@@ -139,7 +161,7 @@ describe("FetchKeywordOpportunitiesUseCase", () => {
     const result = await useCase.execute("project-1");
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toHaveLength(0);
+    if (result.ok) expect(result.value.opportunities).toHaveLength(0);
   });
 
   it("drops rows ranked beyond the band (too far down to be 'striking distance')", async () => {
@@ -155,7 +177,7 @@ describe("FetchKeywordOpportunitiesUseCase", () => {
     const result = await useCase.execute("project-1");
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toHaveLength(0);
+    if (result.ok) expect(result.value.opportunities).toHaveLength(0);
   });
 
   it("drops low-impression rows even if the position is in range (noise filter)", async () => {
@@ -171,7 +193,83 @@ describe("FetchKeywordOpportunitiesUseCase", () => {
     const result = await useCase.execute("project-1");
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toHaveLength(0);
+    if (result.ok) expect(result.value.opportunities).toHaveLength(0);
+  });
+
+  it("detects and persists cannibalization across two distinct pages sharing a query", async () => {
+    const dependencies = deps({
+      searchConsoleClient: {
+        listSites: vi.fn(),
+        fetchDailyPerformance: vi.fn(),
+        fetchPageQueryPerformance: vi.fn().mockResolvedValue(
+          ok([
+            STRIKING_DISTANCE_ROW,
+            { ...STRIKING_DISTANCE_ROW, page: "https://example.com/widgets-guide", clicks: 5, impressions: 80 },
+          ])
+        ),
+      },
+    });
+    const useCase = new FetchKeywordOpportunitiesUseCase(dependencies);
+
+    const result = await useCase.execute("project-1");
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.cannibalizationIssues).toHaveLength(1);
+      expect(result.value.cannibalizationIssues[0].query).toBe("best widgets");
+      expect(result.value.cannibalizationIssues[0].pages.map((p) => p.pageUrl)).toEqual([
+        "https://example.com/blog/widgets",
+        "https://example.com/widgets-guide",
+      ]);
+    }
+    expect(dependencies.keywordCannibalizationRepository.replaceForProject).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not flag a query with only one page above the impression threshold", async () => {
+    const dependencies = deps({
+      searchConsoleClient: {
+        listSites: vi.fn(),
+        fetchDailyPerformance: vi.fn(),
+        fetchPageQueryPerformance: vi.fn().mockResolvedValue(
+          ok([
+            STRIKING_DISTANCE_ROW,
+            { ...STRIKING_DISTANCE_ROW, page: "https://example.com/widgets-guide", impressions: 2 },
+          ])
+        ),
+      },
+    });
+    const useCase = new FetchKeywordOpportunitiesUseCase(dependencies);
+
+    const result = await useCase.execute("project-1");
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.cannibalizationIssues).toHaveLength(0);
+  });
+
+  it("detects and persists CTR underperformers from the same fetched rows", async () => {
+    const dependencies = deps({
+      searchConsoleClient: {
+        listSites: vi.fn(),
+        fetchDailyPerformance: vi.fn(),
+        fetchPageQueryPerformance: vi.fn().mockResolvedValue(
+          ok([
+            { page: "https://example.com/a", query: "widgets", clicks: 30, impressions: 100, ctr: 0.3, position: 2 },
+            { page: "https://example.com/b", query: "gadgets", clicks: 28, impressions: 100, ctr: 0.28, position: 2 },
+            { page: "https://example.com/c", query: "doohickeys", clicks: 5, impressions: 100, ctr: 0.05, position: 2 },
+          ])
+        ),
+      },
+    });
+    const useCase = new FetchKeywordOpportunitiesUseCase(dependencies);
+
+    const result = await useCase.execute("project-1");
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.ctrUnderperformers).toHaveLength(1);
+      expect(result.value.ctrUnderperformers[0].query).toBe("doohickeys");
+    }
+    expect(dependencies.ctrUnderperformerRepository.replaceForProject).toHaveBeenCalledTimes(1);
   });
 
   it("fails with GoogleNotConnectedError when no connection exists", async () => {

@@ -5,6 +5,8 @@ import { PrismaGoogleConnectionRepository } from "@/infrastructure/persistence/p
 import { PrismaSearchPerformanceRepository } from "@/infrastructure/persistence/prisma/prisma-search-performance-repository";
 import { PrismaAnalyticsSnapshotRepository } from "@/infrastructure/persistence/prisma/prisma-analytics-snapshot-repository";
 import { PrismaKeywordOpportunityRepository } from "@/infrastructure/persistence/prisma/prisma-keyword-opportunity-repository";
+import { PrismaKeywordCannibalizationRepository } from "@/infrastructure/persistence/prisma/prisma-keyword-cannibalization-repository";
+import { PrismaCtrUnderperformerRepository } from "@/infrastructure/persistence/prisma/prisma-ctr-underperformer-repository";
 import { PrismaPagePerformanceRepository } from "@/infrastructure/persistence/prisma/prisma-page-performance-repository";
 import { SearchConsoleClient } from "@/infrastructure/google/search-console-client";
 import { AnalyticsClient } from "@/infrastructure/google/analytics-client";
@@ -58,6 +60,8 @@ export function startGoogleTrackingScheduler(logger: Logger): { stop(): void } {
     googleConnectionRepository,
     keywordOpportunityRepository: new PrismaKeywordOpportunityRepository(prisma),
     pagePerformanceRepository: new PrismaPagePerformanceRepository(prisma),
+    keywordCannibalizationRepository: new PrismaKeywordCannibalizationRepository(prisma),
+    ctrUnderperformerRepository: new PrismaCtrUnderperformerRepository(prisma),
   });
 
   async function tickForProject(project: Project): Promise<void> {

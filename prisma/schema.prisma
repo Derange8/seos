@@ -18,29 +18,31 @@ datasource db {
 // single project overall.
 
 model Project {
-  id                   String                      @id @default(cuid())
-  name                 String
-  domain               String                      @unique
-  verificationToken    String                      @default(cuid())
-  domainVerifiedAt     DateTime?
-  autoPilotEnabled     Boolean                     @default(false)
-  crawlJobs            CrawlJob[]
-  pages                Page[]
-  auditRuns            AuditRun[]
-  sitemapFiles         SitemapFile[]
-  robotsFiles          RobotsFile[]
-  llmsTxtFiles         LlmsTxtFile[]
-  eventFailures        EventHandlerFailure[]
-  wordPressConnection  WordPressConnection?
-  googleConnection     GoogleConnection?
-  searchPerformance    SearchPerformanceSnapshot[]
-  analyticsSnapshots   AnalyticsSnapshot[]
-  keywordOpportunities KeywordOpportunity[]
-  pagePerformance      PagePerformance[]
-  contentIdeas         ContentIdea[]
-  growthAnalysis       GrowthAnalysis?
-  pageContentDrafts    PageContentDraft[]
-  createdAt            DateTime                    @default(now())
+  id                      String                      @id @default(cuid())
+  name                    String
+  domain                  String                      @unique
+  verificationToken       String                      @default(cuid())
+  domainVerifiedAt        DateTime?
+  autoPilotEnabled        Boolean                     @default(false)
+  crawlJobs               CrawlJob[]
+  pages                   Page[]
+  auditRuns               AuditRun[]
+  sitemapFiles            SitemapFile[]
+  robotsFiles             RobotsFile[]
+  llmsTxtFiles            LlmsTxtFile[]
+  eventFailures           EventHandlerFailure[]
+  wordPressConnection     WordPressConnection?
+  googleConnection        GoogleConnection?
+  searchPerformance       SearchPerformanceSnapshot[]
+  analyticsSnapshots      AnalyticsSnapshot[]
+  keywordOpportunities    KeywordOpportunity[]
+  keywordCannibalizations KeywordCannibalization[]
+  ctrUnderperformers      CtrUnderperformer[]
+  pagePerformance         PagePerformance[]
+  contentIdeas            ContentIdea[]
+  growthAnalysis          GrowthAnalysis?
+  pageContentDrafts       PageContentDraft[]
+  createdAt               DateTime                    @default(now())
 
   @@map("projects")
 }
@@ -481,6 +483,47 @@ model KeywordOpportunity {
   @@unique([projectId, pageUrl, query])
   @@index([projectId])
   @@map("keyword_opportunities")
+}
+
+// Two or more distinct pages competing for the same query (see
+// detectKeywordCannibalization) — one row per (project, query), wholesale
+// replaced on every refetch rather than upserted, so a resolved query
+// actually disappears instead of lingering as a stale issue.
+model KeywordCannibalization {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  query      String
+  // Array of { pageUrl, clicks, impressions, ctr, position }, sorted
+  // most-impressions-first — see CannibalizingPage.
+  pages      Json
+  detectedAt DateTime @default(now())
+
+  @@unique([projectId, query])
+  @@index([projectId])
+  @@map("keyword_cannibalizations")
+}
+
+// A top-ranking (page, query) pair whose CTR is far below this site's own
+// average CTR for queries at the same rank (see detectCtrUnderperformers)
+// — one row per (project, page, query), wholesale replaced on every
+// refetch, same reasoning as KeywordCannibalization.
+model CtrUnderperformer {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pageUrl     String
+  query       String
+  position    Float
+  ctr         Float
+  expectedCtr Float
+  clicks      Int
+  impressions Int
+  detectedAt  DateTime @default(now())
+
+  @@unique([projectId, pageUrl, query])
+  @@index([projectId])
+  @@map("ctr_underperformers")
 }
 
 // Real per-page GSC totals (unfiltered) — a byproduct of the same

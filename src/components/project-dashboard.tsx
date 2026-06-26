@@ -20,7 +20,7 @@ import type { SeoScoreDto } from "@/application/scoring/dto";
 import type { FixCandidateDto } from "@/application/fixes/dto";
 import type { AuditDeltaDto } from "@/application/delta-audit/dto";
 import type { WordPressConnectionDto } from "@/application/wordpress/dto";
-import type { SearchPerformanceSnapshotDto, AnalyticsSnapshotDto, KeywordOpportunityDto } from "@/application/tracking/dto";
+import type { SearchPerformanceSnapshotDto, AnalyticsSnapshotDto, KeywordOpportunityDto, KeywordCannibalizationIssueDto, CtrUnderperformerDto } from "@/application/tracking/dto";
 import type { ContentIdeaDto, GrowthAnalysisDto, PageContentDraftDto } from "@/application/content-enrichment/dto";
 import { formatAuditReport } from "@/lib/format-audit-report";
 
@@ -227,6 +227,8 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [searchPerformance, setSearchPerformance] = useState<SearchPerformanceSnapshotDto[]>([]);
   const [analyticsSnapshots, setAnalyticsSnapshots] = useState<AnalyticsSnapshotDto[]>([]);
   const [keywordOpportunities, setKeywordOpportunities] = useState<KeywordOpportunityRow[]>([]);
+  const [keywordCannibalization, setKeywordCannibalization] = useState<KeywordCannibalizationIssueDto[]>([]);
+  const [ctrUnderperformers, setCtrUnderperformers] = useState<CtrUnderperformerDto[]>([]);
   const [generatingSuggestionId, setGeneratingSuggestionId] = useState<string | null>(null);
   const [suggestionError, setSuggestionError] = useState<Record<string, string>>({});
   const [copiedSuggestionId, setCopiedSuggestionId] = useState<string | null>(null);
@@ -366,12 +368,16 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
             searchPerformance: SearchPerformanceSnapshotDto[];
             analytics: AnalyticsSnapshotDto[];
             keywordOpportunities: KeywordOpportunityRow[];
+            keywordCannibalization: KeywordCannibalizationIssueDto[];
+            ctrUnderperformers: CtrUnderperformerDto[];
           } | null
         ) => {
           if (data) {
             setSearchPerformance(data.searchPerformance);
             setAnalyticsSnapshots(data.analytics);
             setKeywordOpportunities(data.keywordOpportunities);
+            setKeywordCannibalization(data.keywordCannibalization);
+            setCtrUnderperformers(data.ctrUnderperformers);
           }
         }
       )
@@ -888,6 +894,8 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       if (data.searchPerformance?.status === "error") setGoogleError(data.searchPerformance.error);
       if (data.analytics?.status === "ok") setAnalyticsSnapshots(data.analytics.snapshots);
       if (data.keywordOpportunities?.status === "ok") setKeywordOpportunities(data.keywordOpportunities.opportunities);
+      if (data.keywordCannibalization?.status === "ok") setKeywordCannibalization(data.keywordCannibalization.issues);
+      if (data.ctrUnderperformers?.status === "ok") setCtrUnderperformers(data.ctrUnderperformers.issues);
     } catch {
       setGoogleError("Network error — check your connection and try again.");
     } finally {
@@ -1982,6 +1990,69 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                           {suggestionError[row.id] && <p className="mt-1 text-xs text-red-400">{suggestionError[row.id]}</p>}
                         </div>
                       )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {keywordCannibalization.length > 0 && (
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle>Keyword Cannibalization</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3 text-sm">
+                <p className="text-muted-foreground">
+                  Two or more pages competing for the same query split (and likely suppress) each other&apos;s ranking
+                  — consider consolidating them or differentiating their targeting.
+                </p>
+                <div className="flex flex-col gap-2">
+                  {keywordCannibalization.map((issue) => (
+                    <div key={issue.id} className="rounded-lg border border-white/10 bg-black/20 p-2">
+                      <span className="text-xs font-medium">{issue.query}</span>
+                      <div className="mt-1 flex flex-col gap-1">
+                        {issue.pages.map((page) => (
+                          <div key={page.pageUrl} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                            <p className="truncate text-xs text-muted-foreground" title={page.pageUrl}>
+                              {page.pageUrl}
+                            </p>
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              Position {page.position.toFixed(1)} · {page.impressions} impressions
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {ctrUnderperformers.length > 0 && (
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle>CTR Underperformers</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3 text-sm">
+                <p className="text-muted-foreground">
+                  These pages rank well but get far fewer clicks than this site&apos;s own average at that rank — the
+                  ranking is fine, the title or meta description in the snippet isn&apos;t earning the clicks it should.
+                </p>
+                <div className="flex flex-col gap-2">
+                  {ctrUnderperformers.map((issue) => (
+                    <div key={issue.id} className="rounded-lg border border-white/10 bg-black/20 p-2">
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                        <span className="text-xs font-medium">{issue.query}</span>
+                        <span className="text-xs text-muted-foreground">
+                          Position {issue.position.toFixed(1)} · {(issue.ctr * 100).toFixed(1)}% CTR vs.{" "}
+                          {(issue.expectedCtr * 100).toFixed(1)}% expected
+                        </span>
+                      </div>
+                      <p className="truncate text-xs text-muted-foreground" title={issue.pageUrl}>
+                        {issue.pageUrl}
+                      </p>
                     </div>
                   ))}
                 </div>

@@ -1,9 +1,15 @@
 import { KeywordOpportunity } from "@/domain/tracking/entities/keyword-opportunity";
 import { PagePerformance } from "@/domain/tracking/entities/page-performance";
+import type { KeywordCannibalizationIssue } from "@/domain/tracking/entities/keyword-cannibalization";
+import { detectKeywordCannibalization } from "@/domain/tracking/services/keyword-cannibalization-detector";
+import type { CtrUnderperformer } from "@/domain/tracking/entities/ctr-underperformer";
+import { detectCtrUnderperformers } from "@/domain/tracking/services/ctr-underperformer-detector";
 import type { GoogleOAuthPort, GoogleOAuthError } from "@/application/tracking/ports/google-oauth-port";
 import type { PageQueryPerformance, SearchConsoleApiError, SearchConsoleClientPort } from "@/application/tracking/ports/search-console-client-port";
 import type { GoogleConnectionRepositoryPort } from "@/application/tracking/ports/google-connection-repository-port";
 import type { KeywordOpportunityRepositoryPort } from "@/application/tracking/ports/keyword-opportunity-repository-port";
+import type { KeywordCannibalizationRepositoryPort } from "@/application/tracking/ports/keyword-cannibalization-repository-port";
+import type { CtrUnderperformerRepositoryPort } from "@/application/tracking/ports/ctr-underperformer-repository-port";
 import type { PagePerformanceRepositoryPort } from "@/application/tracking/ports/page-performance-repository-port";
 import { DomainError } from "@/shared/domain-error";
 import { err, ok, type Result } from "@/shared/result";
@@ -22,6 +28,17 @@ export interface FetchKeywordOpportunitiesDeps {
   googleConnectionRepository: GoogleConnectionRepositoryPort;
   keywordOpportunityRepository: KeywordOpportunityRepositoryPort;
   pagePerformanceRepository: PagePerformanceRepositoryPort;
+  keywordCannibalizationRepository: KeywordCannibalizationRepositoryPort;
+  ctrUnderperformerRepository: CtrUnderperformerRepositoryPort;
+}
+
+export interface FetchKeywordOpportunitiesResult {
+  opportunities: KeywordOpportunity[];
+  // Both detected from the exact same fetchPageQueryPerformance rows as
+  // opportunities above — no separate GSC API call, see
+  // detectKeywordCannibalization and detectCtrUnderperformers.
+  cannibalizationIssues: KeywordCannibalizationIssue[];
+  ctrUnderperformers: CtrUnderperformer[];
 }
 
 // Aggregates the same raw per-(page, query) rows across ALL queries for a
@@ -70,7 +87,12 @@ export class FetchKeywordOpportunitiesUseCase {
 
   async execute(
     projectId: string
-  ): Promise<Result<KeywordOpportunity[], GoogleNotConnectedError | GscSiteNotConfiguredError | GoogleOAuthError | SearchConsoleApiError>> {
+  ): Promise<
+    Result<
+      FetchKeywordOpportunitiesResult,
+      GoogleNotConnectedError | GscSiteNotConfiguredError | GoogleOAuthError | SearchConsoleApiError
+    >
+  > {
     const connection = await this.deps.googleConnectionRepository.findByProjectId(projectId);
     if (!connection) {
       return err(new GoogleNotConnectedError("No Google account connected for this project"));
@@ -104,8 +126,13 @@ export class FetchKeywordOpportunitiesUseCase {
         KeywordOpportunity.create(projectId, row.page, row.query, row.clicks, row.impressions, row.ctr, row.position)
       );
 
+    const cannibalizationIssues = detectKeywordCannibalization(projectId, performanceResult.value);
+    const ctrUnderperformers = detectCtrUnderperformers(projectId, performanceResult.value);
+
     await this.deps.keywordOpportunityRepository.saveMany(opportunities);
     await this.deps.pagePerformanceRepository.saveMany(aggregateByPage(performanceResult.value, projectId));
-    return ok(opportunities);
+    await this.deps.keywordCannibalizationRepository.replaceForProject(projectId, cannibalizationIssues);
+    await this.deps.ctrUnderperformerRepository.replaceForProject(projectId, ctrUnderperformers);
+    return ok({ opportunities, cannibalizationIssues, ctrUnderperformers });
   }
 }
