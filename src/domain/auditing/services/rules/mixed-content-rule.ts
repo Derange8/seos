@@ -4,6 +4,9 @@ import type { Page } from "@/domain/crawling/entities/page";
 
 export const mixedContentRule: AuditRule = {
   id: "mixed-content",
+  // Security, not search-ranking — applies whether or not the page is
+  // meant to be indexed.
+  appliesToNoindexPages: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.mixedContentCount === 0) return [];
     return [

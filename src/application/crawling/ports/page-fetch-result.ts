@@ -12,6 +12,11 @@ export interface PageFetchResult {
   // not including finalUrl. See Crawler Engine design §9 (redirect loops).
   redirectChain: readonly string[];
   renderMode: RenderMode;
+  // Raw Content-Security-Policy response header, null when absent. Feeds
+  // the csp-blocks-script rule — whether a page's own CSP would let the
+  // browser actually load the external scripts it references is only
+  // knowable from this header, not from the HTML alone.
+  cspHeader: string | null;
 }
 
 export type PageFetchErrorCode =

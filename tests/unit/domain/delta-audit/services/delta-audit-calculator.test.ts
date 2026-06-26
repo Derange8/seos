@@ -13,8 +13,8 @@ describe("computeAuditDelta", () => {
     const resolvedIssue = issue("run-1", "page-1", "missing-title");
 
     const delta = computeAuditDelta(
-      { runId: "run-1", overallScore: 80, issues: [resolvedIssue] },
-      { runId: "run-2", overallScore: 100, issues: [] },
+      { runId: "run-1", overallScore: 80, pageCount: 1, issues: [resolvedIssue] },
+      { runId: "run-2", overallScore: 100, pageCount: 1, issues: [] },
       new Map([["page-1", PAGE_URL]])
     );
 
@@ -29,8 +29,8 @@ describe("computeAuditDelta", () => {
     const newIssue = issue("run-2", "page-2", "missing-h1");
 
     const delta = computeAuditDelta(
-      { runId: "run-1", overallScore: 100, issues: [] },
-      { runId: "run-2", overallScore: 96, issues: [newIssue] },
+      { runId: "run-1", overallScore: 100, pageCount: 1, issues: [] },
+      { runId: "run-2", overallScore: 96, pageCount: 1, issues: [newIssue] },
       new Map([["page-2", PAGE_URL]])
     );
 
@@ -47,8 +47,8 @@ describe("computeAuditDelta", () => {
     const after = issue("run-2", "page-1-v2", "missing-canonical", "INFO");
 
     const delta = computeAuditDelta(
-      { runId: "run-1", overallScore: 99, issues: [before] },
-      { runId: "run-2", overallScore: 99, issues: [after] },
+      { runId: "run-1", overallScore: 99, pageCount: 1, issues: [before] },
+      { runId: "run-2", overallScore: 99, pageCount: 1, issues: [after] },
       new Map([
         ["page-1", PAGE_URL],
         ["page-1-v2", PAGE_URL],
@@ -65,8 +65,8 @@ describe("computeAuditDelta", () => {
     const onPageB = issue("run-2", "page-b", "missing-title");
 
     const delta = computeAuditDelta(
-      { runId: "run-1", overallScore: 90, issues: [onPageA] },
-      { runId: "run-2", overallScore: 90, issues: [onPageB] },
+      { runId: "run-1", overallScore: 90, pageCount: 1, issues: [onPageA] },
+      { runId: "run-2", overallScore: 90, pageCount: 1, issues: [onPageB] },
       new Map([
         ["page-a", "https://example.com/a"],
         ["page-b", "https://example.com/b"],
@@ -82,8 +82,8 @@ describe("computeAuditDelta", () => {
     const orphanIssue = issue("run-1", "unknown-page", "missing-title");
 
     const delta = computeAuditDelta(
-      { runId: "run-1", overallScore: 90, issues: [orphanIssue] },
-      { runId: "run-2", overallScore: 90, issues: [] },
+      { runId: "run-1", overallScore: 90, pageCount: 1, issues: [orphanIssue] },
+      { runId: "run-2", overallScore: 90, pageCount: 1, issues: [] },
       new Map()
     );
 
@@ -91,10 +91,21 @@ describe("computeAuditDelta", () => {
     expect(delta.resolvedCount).toBe(0);
   });
 
+  it("carries each run's page count through, even when the score barely moved despite a deeper crawl", () => {
+    const delta = computeAuditDelta(
+      { runId: "run-1", overallScore: 86.06, pageCount: 17, issues: [] },
+      { runId: "run-2", overallScore: 86.21, pageCount: 39, issues: [] },
+      new Map()
+    );
+
+    expect(delta.previousPageCount).toBe(17);
+    expect(delta.currentPageCount).toBe(39);
+  });
+
   it("returns a null scoreDelta when either score is unavailable", () => {
     const delta = computeAuditDelta(
-      { runId: "run-1", overallScore: null, issues: [] },
-      { runId: "run-2", overallScore: 90, issues: [] },
+      { runId: "run-1", overallScore: null, pageCount: 1, issues: [] },
+      { runId: "run-2", overallScore: 90, pageCount: 1, issues: [] },
       new Map()
     );
 

@@ -73,6 +73,8 @@ describe("selectSitemapEntries", () => {
         canonicalTagCount: 0,
         isNoindex: false,
         isOrphan: false,
+        cspHeader: null,
+        externalScriptOrigins: [],
       },
       []
     );

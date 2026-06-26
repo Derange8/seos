@@ -117,6 +117,8 @@ export class ProcessPageTaskUseCase {
       h1Count: parsed.h1Count,
       canonicalTagCount: parsed.canonicalTagCount,
       isNoindex: parsed.isNoindex,
+      cspHeader: fetched.cspHeader,
+      externalScriptOrigins: parsed.externalScriptOrigins,
     });
 
     const discoveredTasks: PageTask[] = [];

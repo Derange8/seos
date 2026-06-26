@@ -71,6 +71,13 @@ export interface PageAttributes {
   // hasDuplicateTitle above). The crawl's root page is never orphaned by
   // definition, even though nothing within the crawl links to it either.
   isOrphan?: boolean;
+  // Raw Content-Security-Policy response header (see PageFetchResult.cspHeader),
+  // null when the page sent none. Feeds the csp-blocks-script rule.
+  cspHeader?: string | null;
+  // Cross-origin <script src> origins the page references (see
+  // ParsedPageContent.externalScriptOrigins). Feeds the csp-blocks-script
+  // rule, paired with cspHeader.
+  externalScriptOrigins?: readonly string[];
 }
 
 export interface PageProps extends Required<PageAttributes> {
@@ -112,6 +119,8 @@ export class Page {
       canonicalTagCount: attributes.canonicalTagCount ?? 0,
       isNoindex: attributes.isNoindex ?? false,
       isOrphan: attributes.isOrphan ?? false,
+      cspHeader: attributes.cspHeader ?? null,
+      externalScriptOrigins: attributes.externalScriptOrigins ?? [],
     });
   }
 
@@ -230,6 +239,14 @@ export class Page {
 
   get isOrphan(): boolean {
     return this.props.isOrphan;
+  }
+
+  get cspHeader(): string | null {
+    return this.props.cspHeader;
+  }
+
+  get externalScriptOrigins(): readonly string[] {
+    return this.props.externalScriptOrigins;
   }
 
   // Same rationale as setDuplicateFlags: recomputed wholesale on every

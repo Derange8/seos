@@ -13,6 +13,7 @@ interface MockPost {
   slug: string;
   title: string;
   excerpt?: string;
+  content?: string;
 }
 
 function basicAuthHeader(username: string, password: string): string {
@@ -47,6 +48,7 @@ async function startMockWordPress(posts: MockPost[]): Promise<{ origin: string; 
           id: post.id,
           title: { raw: post.title, rendered: post.title },
           excerpt: { raw: post.excerpt ?? "", rendered: post.excerpt ?? "" },
+          content: { raw: post.content ?? "", rendered: post.content ?? "" },
         }));
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(matches));
@@ -69,12 +71,14 @@ async function startMockWordPress(posts: MockPost[]): Promise<{ origin: string; 
         const parsed = JSON.parse(body || "{}");
         if (typeof parsed.title === "string") post.title = parsed.title;
         if (typeof parsed.excerpt === "string") post.excerpt = parsed.excerpt;
+        if (typeof parsed.content === "string") post.content = parsed.content;
         res.writeHead(200, { "content-type": "application/json" });
         res.end(
           JSON.stringify({
             id: post.id,
             title: { raw: post.title, rendered: post.title },
             excerpt: { raw: post.excerpt ?? "", rendered: post.excerpt ?? "" },
+            content: { raw: post.content ?? "", rendered: post.content ?? "" },
           })
         );
       });
@@ -157,7 +161,7 @@ describe("WordPressRestApiClient", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value).toEqual({ id: 42, postType: "page", currentTitle: "About Us", currentExcerpt: "Our story" });
+      expect(result.value).toEqual({ id: 42, postType: "page", currentTitle: "About Us", currentExcerpt: "Our story", currentContent: "" });
     }
   });
 
@@ -170,7 +174,7 @@ describe("WordPressRestApiClient", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value).toEqual({ id: 7, postType: "post", currentTitle: "Hello World", currentExcerpt: "" });
+      expect(result.value).toEqual({ id: 7, postType: "post", currentTitle: "Hello World", currentExcerpt: "", currentContent: "" });
     }
   });
 
@@ -192,7 +196,7 @@ describe("WordPressRestApiClient", () => {
 
     const result = await client.updateTitle(
       connection(server.origin),
-      { id: 42, postType: "page", currentTitle: "About Us", currentExcerpt: "" },
+      { id: 42, postType: "page", currentTitle: "About Us", currentExcerpt: "", currentContent: "" },
       "About Our Company"
     );
     expect(result.ok).toBe(true);
@@ -209,7 +213,7 @@ describe("WordPressRestApiClient", () => {
 
     const result = await client.updateTitle(
       connection(server.origin),
-      { id: 999, postType: "page", currentTitle: "Old", currentExcerpt: "" },
+      { id: 999, postType: "page", currentTitle: "Old", currentExcerpt: "", currentContent: "" },
       "New"
     );
 
@@ -224,7 +228,7 @@ describe("WordPressRestApiClient", () => {
 
     const result = await client.updateExcerpt(
       connection(server.origin),
-      { id: 42, postType: "page", currentTitle: "About Us", currentExcerpt: "Old excerpt" },
+      { id: 42, postType: "page", currentTitle: "About Us", currentExcerpt: "Old excerpt", currentContent: "" },
       "New excerpt"
     );
     expect(result.ok).toBe(true);
@@ -241,7 +245,39 @@ describe("WordPressRestApiClient", () => {
 
     const result = await client.updateExcerpt(
       connection(server.origin),
-      { id: 999, postType: "page", currentTitle: "Old", currentExcerpt: "Old" },
+      { id: 999, postType: "page", currentTitle: "Old", currentExcerpt: "Old", currentContent: "" },
+      "New"
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("WORDPRESS_POST_NOT_FOUND");
+  });
+
+  it("updateContent updates the page's content on the mock server", async () => {
+    const server = await startMockWordPress([{ id: 42, type: "page", slug: "about", title: "About Us", content: "<p>Old content</p>" }]);
+    cleanup = server.close;
+    const client = new WordPressRestApiClient({ allowPrivateNetworks: true });
+
+    const result = await client.updateContent(
+      connection(server.origin),
+      { id: 42, postType: "page", currentTitle: "About Us", currentExcerpt: "", currentContent: "<p>Old content</p>" },
+      "<h2>New section</h2><p>New content</p>"
+    );
+    expect(result.ok).toBe(true);
+
+    const lookup = await client.findPostByUrl(connection(server.origin), `${server.origin}/about`);
+    expect(lookup.ok).toBe(true);
+    if (lookup.ok) expect(lookup.value.currentContent).toBe("<h2>New section</h2><p>New content</p>");
+  });
+
+  it("updateContent returns WORDPRESS_POST_NOT_FOUND for a post id that no longer exists", async () => {
+    const server = await startMockWordPress([]);
+    cleanup = server.close;
+    const client = new WordPressRestApiClient({ allowPrivateNetworks: true });
+
+    const result = await client.updateContent(
+      connection(server.origin),
+      { id: 999, postType: "page", currentTitle: "Old", currentExcerpt: "", currentContent: "Old" },
       "New"
     );
 

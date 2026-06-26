@@ -16,6 +16,13 @@ export interface AuditDelta {
   previousScore: number | null;
   currentScore: number | null;
   scoreDelta: number | null;
+  // The score is a per-page average penalty (see seo-score-calculator.ts),
+  // so a crawl that goes deeper and finds more pages can leave the score
+  // roughly flat even while the absolute issue count rises a lot — without
+  // these, that looks like a bug ("184 issues now but the same score?")
+  // rather than what it is: a bigger site, sampled more completely.
+  previousPageCount: number;
+  currentPageCount: number;
   resolvedCount: number;
   newCount: number;
   persistingCount: number;
@@ -25,6 +32,7 @@ export interface AuditDelta {
 export interface AuditRunSnapshot {
   runId: string;
   overallScore: number | null;
+  pageCount: number;
   issues: readonly AuditIssue[];
 }
 
@@ -99,6 +107,8 @@ export function computeAuditDelta(
     previousScore: previous.overallScore,
     currentScore: current.overallScore,
     scoreDelta,
+    previousPageCount: previous.pageCount,
+    currentPageCount: current.pageCount,
     resolvedCount: issues.filter((issue) => issue.changeType === "RESOLVED").length,
     newCount: issues.filter((issue) => issue.changeType === "NEW").length,
     persistingCount: issues.filter((issue) => issue.changeType === "PERSISTING").length,

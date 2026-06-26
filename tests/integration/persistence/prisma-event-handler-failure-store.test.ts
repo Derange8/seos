@@ -33,14 +33,18 @@ describe("PrismaEventHandlerFailureStore", () => {
       data: { name: "Isolated", domain: `itest-${crypto.randomUUID()}.example.com` },
     });
 
-    await store.record({ projectId: isolatedProject.id, eventType: "First", message: "1" });
-    await store.record({ projectId: isolatedProject.id, eventType: "Second", message: "2" });
-    await store.record({ projectId: isolatedProject.id, eventType: "Third", message: "3" });
+    try {
+      await store.record({ projectId: isolatedProject.id, eventType: "First", message: "1" });
+      await store.record({ projectId: isolatedProject.id, eventType: "Second", message: "2" });
+      await store.record({ projectId: isolatedProject.id, eventType: "Third", message: "3" });
 
-    const found = await store.findRecentByProjectId(isolatedProject.id, 2);
+      const found = await store.findRecentByProjectId(isolatedProject.id, 2);
 
-    expect(found).toHaveLength(2);
-    expect(found.map((f) => f.eventType)).toEqual(["Third", "Second"]);
+      expect(found).toHaveLength(2);
+      expect(found.map((f) => f.eventType)).toEqual(["Third", "Second"]);
+    } finally {
+      await prisma.project.delete({ where: { id: isolatedProject.id } });
+    }
   });
 
   it("returns an empty array for a project with no failures", async () => {

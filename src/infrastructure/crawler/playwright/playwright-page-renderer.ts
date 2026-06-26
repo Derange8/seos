@@ -78,6 +78,7 @@ export class PlaywrightPageRenderer implements PageRendererPort {
         responseTimeMs: Math.round(performance.now() - startedAt),
         redirectChain: this.extractRedirectChain(response),
         renderMode: "PLAYWRIGHT",
+        cspHeader: (await response.allHeaders())["content-security-policy"] ?? null,
       });
     } catch (cause) {
       return err(this.toFetchError(cause, url.href));

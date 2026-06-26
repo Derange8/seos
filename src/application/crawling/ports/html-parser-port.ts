@@ -53,6 +53,11 @@ export interface ParsedPageContent {
   // search engines to exclude it from results. Often intentional, but a
   // classic, costly mistake when it isn't. Feeds the noindex audit rule.
   isNoindex: boolean;
+  // Distinct origins (scheme + host[:port]) of every <script src> pointing
+  // off-page — same-origin scripts are never blocked by the page's own
+  // CSP, so only cross-origin ones are worth recording. Feeds the
+  // csp-blocks-script audit rule, paired with Page.cspHeader.
+  externalScriptOrigins: readonly string[];
 }
 
 export interface HtmlParserPort {

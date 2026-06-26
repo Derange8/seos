@@ -74,6 +74,32 @@ describe("PlaywrightPageRenderer", () => {
     }
   }, 30000);
 
+  it("captures the Content-Security-Policy response header when present", async () => {
+    const server = await startServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/html", "content-security-policy": "default-src 'self'" });
+      res.end("<html><body>hello</body></html>");
+    });
+    cleanup = server.close;
+
+    const result = await renderer.render(url(server.origin));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.cspHeader).toBe("default-src 'self'");
+  }, 30000);
+
+  it("returns a null cspHeader when the response has no CSP header", async () => {
+    const server = await startServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end("<html><body>hello</body></html>");
+    });
+    cleanup = server.close;
+
+    const result = await renderer.render(url(server.origin));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.cspHeader).toBeNull();
+  }, 30000);
+
   it("returns TIMEOUT when navigation exceeds the configured timeout", async () => {
     const server = await startServer((_req, res) => {
       setTimeout(() => {

@@ -4,6 +4,9 @@ import type { Page } from "@/domain/crawling/entities/page";
 
 export const missingImageAltRule: AuditRule = {
   id: "missing-image-alt",
+  // Accessibility, not search-ranking — a real visitor on a noindex'd
+  // (e.g. logged-in) page still relies on alt text the same as anyone else.
+  appliesToNoindexPages: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.imagesMissingAltCount === 0) return [];
     return [

@@ -15,6 +15,7 @@ function toDomain(row: PrismaProjectRow): Project {
     domain: domainResult.value,
     verificationToken: row.verificationToken,
     domainVerifiedAt: row.domainVerifiedAt,
+    autoPilotEnabled: row.autoPilotEnabled,
   };
 
   return Project.reconstitute(props);
@@ -24,7 +25,7 @@ export class PrismaProjectRepository implements ProjectRepositoryPort {
   constructor(private readonly client: PrismaClient) {}
 
   async save(project: Project): Promise<void> {
-    const data = { domainVerifiedAt: project.domainVerifiedAt };
+    const data = { domainVerifiedAt: project.domainVerifiedAt, autoPilotEnabled: project.autoPilotEnabled };
 
     await this.client.project.upsert({
       where: { id: project.id },

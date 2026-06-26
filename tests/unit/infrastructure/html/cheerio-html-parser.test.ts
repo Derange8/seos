@@ -84,6 +84,35 @@ describe("CheerioHtmlParser", () => {
     expect(result.contentExcerpt).toBeNull();
   });
 
+  it("excludes script and style tag content from word count, hash, and excerpt", () => {
+    const html = `<body>
+      <script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Seos"}</script>
+      <style>body { color: red; }</style>
+      <p>Real visible content.</p>
+    </body>`;
+    const result = parser.parse(html, baseUrl);
+    expect(result.contentExcerpt).toBe("Real visible content.");
+    expect(result.wordCount).toBe(3);
+  });
+
+  it("excludes nav and footer content from word count, hash, and excerpt", () => {
+    const html = `<body>
+      <nav><a href="/a">Keşfet</a><a href="/b">Canlı</a><a href="/c">Sonuçlar</a></nav>
+      <p>Real page content goes here.</p>
+      <footer>© 2026 janus.vote</footer>
+    </body>`;
+    const result = parser.parse(html, baseUrl);
+    expect(result.contentExcerpt).toBe("Real page content goes here.");
+    expect(result.wordCount).toBe(5);
+  });
+
+  it("still detects structured data even though script tags are stripped from the visible-text extraction", () => {
+    const html = `<body><script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization"}</script><p>Hello.</p></body>`;
+    const result = parser.parse(html, baseUrl);
+    expect(result.hasStructuredData).toBe(true);
+    expect(result.contentExcerpt).toBe("Hello.");
+  });
+
   it("captures a short excerpt of the visible text for the fix engine to use later", () => {
     const result = parser.parse("<body><p>This is the real page content.</p></body>", baseUrl);
     expect(result.contentExcerpt).toBe("This is the real page content.");
@@ -188,6 +217,50 @@ describe("CheerioHtmlParser", () => {
 
     it("is zero when there is no canonical tag", () => {
       expect(parser.parse("<head></head>", baseUrl).canonicalTagCount).toBe(0);
+    });
+  });
+
+  describe("externalScriptOrigins", () => {
+    it("collects the origin of a cross-origin script, not the full URL", () => {
+      const html = `<head><script src="https://www.googletagmanager.com/gtag/js?id=G-ABC123"></script></head>`;
+      expect(parser.parse(html, baseUrl).externalScriptOrigins).toEqual(["https://www.googletagmanager.com"]);
+    });
+
+    it("does not count a same-origin script", () => {
+      const html = `<head><script src="/static/app.js"></script></head>`;
+      expect(parser.parse(html, baseUrl).externalScriptOrigins).toEqual([]);
+    });
+
+    it("does not count an inline script with no src", () => {
+      const html = `<body><script>console.log("inline");</script></body>`;
+      expect(parser.parse(html, baseUrl).externalScriptOrigins).toEqual([]);
+    });
+
+    it("dedupes multiple scripts from the same external origin", () => {
+      const html = `
+        <head>
+          <script src="https://www.googletagmanager.com/gtag/js?id=G-ABC123"></script>
+          <script src="https://www.googletagmanager.com/gtm.js?id=GTM-XYZ"></script>
+        </head>
+      `;
+      expect(parser.parse(html, baseUrl).externalScriptOrigins).toEqual(["https://www.googletagmanager.com"]);
+    });
+
+    it("collects multiple distinct external origins", () => {
+      const html = `
+        <head>
+          <script src="https://www.googletagmanager.com/gtag/js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        </head>
+      `;
+      expect(parser.parse(html, baseUrl).externalScriptOrigins).toEqual([
+        "https://www.googletagmanager.com",
+        "https://cdn.jsdelivr.net",
+      ]);
+    });
+
+    it("is empty for a page with no scripts at all", () => {
+      expect(parser.parse("<body><p>No scripts here.</p></body>", baseUrl).externalScriptOrigins).toEqual([]);
     });
   });
 

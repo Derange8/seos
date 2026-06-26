@@ -88,19 +88,23 @@ describe("PrismaCrawlJobRepository", () => {
       data: { name: "Active Job Test Project", domain: `itest-${crypto.randomUUID()}.example.com` },
     });
 
-    const finished = CrawlJob.create(isolatedProject.id, config());
-    finished.start();
-    finished.complete();
-    await repository.save(finished);
+    try {
+      const finished = CrawlJob.create(isolatedProject.id, config());
+      finished.start();
+      finished.complete();
+      await repository.save(finished);
 
-    const noneYet = await repository.findActiveByProjectId(isolatedProject.id);
-    expect(noneYet).toBeNull();
+      const noneYet = await repository.findActiveByProjectId(isolatedProject.id);
+      expect(noneYet).toBeNull();
 
-    const running = CrawlJob.create(isolatedProject.id, config());
-    running.start();
-    await repository.save(running);
+      const running = CrawlJob.create(isolatedProject.id, config());
+      running.start();
+      await repository.save(running);
 
-    const active = await repository.findActiveByProjectId(isolatedProject.id);
-    expect(active?.id).toBe(running.id);
+      const active = await repository.findActiveByProjectId(isolatedProject.id);
+      expect(active?.id).toBe(running.id);
+    } finally {
+      await prisma.project.delete({ where: { id: isolatedProject.id } });
+    }
   });
 });

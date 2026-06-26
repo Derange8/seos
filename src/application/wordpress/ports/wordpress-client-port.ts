@@ -39,6 +39,10 @@ export interface WordPressPostRef {
   // field. Writing here is a genuine, real edit either way; whether it's
   // *the* edit that changes the rendered tag is theme/plugin-dependent.
   currentExcerpt: string;
+  // The post's raw post_content — needed by PublishPageContentDraftUseCase
+  // to capture a rollback value before overwriting the whole body, the
+  // same way currentTitle/currentExcerpt already do for their own fields.
+  currentContent: string;
 }
 
 export interface WordPressClientPort {
@@ -53,5 +57,10 @@ export interface WordPressClientPort {
     connection: WordPressConnection,
     post: WordPressPostRef,
     excerpt: string
+  ): Promise<Result<void, WordPressClientError>>;
+  updateContent(
+    connection: WordPressConnection,
+    post: WordPressPostRef,
+    content: string
   ): Promise<Result<void, WordPressClientError>>;
 }

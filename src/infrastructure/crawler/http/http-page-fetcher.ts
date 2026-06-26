@@ -95,6 +95,7 @@ export class HttpPageFetcher implements PageFetcherPort {
         responseTimeMs: Math.round(performance.now() - startedAt),
         redirectChain,
         renderMode: "HTTP",
+        cspHeader: response.headers.get("content-security-policy"),
       });
     }
 

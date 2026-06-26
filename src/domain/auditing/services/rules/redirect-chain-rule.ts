@@ -10,6 +10,7 @@ const MIN_CHAIN_LENGTH = 2;
 
 export const redirectChainRule: AuditRule = {
   id: "redirect-chain",
+  appliesToNoindexPages: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.redirectChain.length < MIN_CHAIN_LENGTH) return [];
     return [

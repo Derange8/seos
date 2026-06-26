@@ -42,7 +42,7 @@ describe("RevertFixCandidateUseCase", () => {
     fixCandidate.markApplied("Old Title");
     await deps.fixCandidateRepository.saveMany([fixCandidate]);
     deps.wordPressConnectionRepository.seed(WordPressConnection.create("project-1", "https://example.com", "bot", "pw"));
-    deps.wordPressClient.findPostByUrlResult = ok({ id: 1, postType: "page", currentTitle: "New Title", currentExcerpt: "" });
+    deps.wordPressClient.findPostByUrlResult = ok({ id: 1, postType: "page", currentTitle: "New Title", currentExcerpt: "", currentContent: "" });
 
     const useCase = new RevertFixCandidateUseCase(deps);
     const result = await useCase.execute("project-1", fixCandidate.id);
@@ -51,7 +51,7 @@ describe("RevertFixCandidateUseCase", () => {
     expect(fixCandidate.status).toBe("DRAFT");
     expect(fixCandidate.previousValue).toBeNull();
     expect(deps.wordPressClient.updateTitleCalls).toEqual([
-      { post: { id: 1, postType: "page", currentTitle: "New Title", currentExcerpt: "" }, title: "Old Title" },
+      { post: { id: 1, postType: "page", currentTitle: "New Title", currentExcerpt: "", currentContent: "" }, title: "Old Title" },
     ]);
   });
 
@@ -63,7 +63,7 @@ describe("RevertFixCandidateUseCase", () => {
     fixCandidate.markApplied("Old description");
     await deps.fixCandidateRepository.saveMany([fixCandidate]);
     deps.wordPressConnectionRepository.seed(WordPressConnection.create("project-1", "https://example.com", "bot", "pw"));
-    deps.wordPressClient.findPostByUrlResult = ok({ id: 1, postType: "page", currentTitle: "Title", currentExcerpt: "New description" });
+    deps.wordPressClient.findPostByUrlResult = ok({ id: 1, postType: "page", currentTitle: "Title", currentExcerpt: "New description", currentContent: "" });
 
     const useCase = new RevertFixCandidateUseCase(deps);
     const result = await useCase.execute("project-1", fixCandidate.id);
@@ -71,7 +71,7 @@ describe("RevertFixCandidateUseCase", () => {
     expect(result.ok).toBe(true);
     expect(fixCandidate.status).toBe("DRAFT");
     expect(deps.wordPressClient.updateExcerptCalls).toEqual([
-      { post: { id: 1, postType: "page", currentTitle: "Title", currentExcerpt: "New description" }, excerpt: "Old description" },
+      { post: { id: 1, postType: "page", currentTitle: "Title", currentExcerpt: "New description", currentContent: "" }, excerpt: "Old description" },
     ]);
     expect(deps.wordPressClient.updateTitleCalls).toEqual([]);
   });
@@ -98,7 +98,7 @@ describe("RevertFixCandidateUseCase", () => {
     fixCandidate.markApplied("Old Title");
     await deps.fixCandidateRepository.saveMany([fixCandidate]);
     deps.wordPressConnectionRepository.seed(WordPressConnection.create("project-1", "https://example.com", "bot", "pw"));
-    deps.wordPressClient.findPostByUrlResult = ok({ id: 1, postType: "page", currentTitle: "New Title", currentExcerpt: "" });
+    deps.wordPressClient.findPostByUrlResult = ok({ id: 1, postType: "page", currentTitle: "New Title", currentExcerpt: "", currentContent: "" });
     deps.wordPressClient.updateTitleResult = err(new WordPressUnreachableError("network error"));
 
     const useCase = new RevertFixCandidateUseCase(deps);

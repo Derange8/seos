@@ -29,7 +29,20 @@ async function seededDeps(
   overrides: Partial<{ contentIdea: ContentIdeaPort; contentIdeaRepository: ContentIdeaRepositoryPort }> = {}
 ) {
   const crawlJobRepository = new FakeCrawlJobRepository();
-  const crawlJob = CrawlJob.create("project-1", configValue());
+  // Fixed id ("job-1") rather than CrawlJob.create's random one — every
+  // page below is created with crawlJobId "job-1" too, and the fake page
+  // repository now actually filters by crawlJobId (it used to ignore the
+  // parameter and return everything, masking a real id mismatch here).
+  const crawlJob = CrawlJob.reconstitute({
+    id: "job-1",
+    projectId: "project-1",
+    config: configValue(),
+    status: "COMPLETED",
+    pageCount: pages.length,
+    startedAt: new Date(),
+    finishedAt: new Date(),
+    error: null,
+  });
   crawlJobRepository.seed(crawlJob);
 
   const pageRepository = new FakePageRepository();

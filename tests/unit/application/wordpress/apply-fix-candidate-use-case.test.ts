@@ -41,7 +41,7 @@ describe("ApplyFixCandidateUseCase", () => {
     const fixCandidate = FixCandidate.createRuleBased("issue-1", page.id, "TITLE", "New Title");
     await deps.fixCandidateRepository.saveMany([fixCandidate]);
     deps.wordPressConnectionRepository.seed(WordPressConnection.create("project-1", "https://example.com", "bot", "pw"));
-    deps.wordPressClient.findPostByUrlResult = ok({ id: 1, postType: "page", currentTitle: "Old Title", currentExcerpt: "" });
+    deps.wordPressClient.findPostByUrlResult = ok({ id: 1, postType: "page", currentTitle: "Old Title", currentExcerpt: "", currentContent: "" });
 
     const useCase = new ApplyFixCandidateUseCase(deps);
     const result = await useCase.execute("project-1", fixCandidate.id);
@@ -50,7 +50,7 @@ describe("ApplyFixCandidateUseCase", () => {
     expect(fixCandidate.status).toBe("APPLIED");
     expect(fixCandidate.previousValue).toBe("Old Title");
     expect(deps.wordPressClient.updateTitleCalls).toEqual([
-      { post: { id: 1, postType: "page", currentTitle: "Old Title", currentExcerpt: "" }, title: "New Title" },
+      { post: { id: 1, postType: "page", currentTitle: "Old Title", currentExcerpt: "", currentContent: "" }, title: "New Title" },
     ]);
   });
 
@@ -61,7 +61,7 @@ describe("ApplyFixCandidateUseCase", () => {
     const fixCandidate = FixCandidate.createRuleBased("issue-1", page.id, "META_DESCRIPTION", "A new description");
     await deps.fixCandidateRepository.saveMany([fixCandidate]);
     deps.wordPressConnectionRepository.seed(WordPressConnection.create("project-1", "https://example.com", "bot", "pw"));
-    deps.wordPressClient.findPostByUrlResult = ok({ id: 1, postType: "page", currentTitle: "Title", currentExcerpt: "Old description" });
+    deps.wordPressClient.findPostByUrlResult = ok({ id: 1, postType: "page", currentTitle: "Title", currentExcerpt: "Old description", currentContent: "" });
 
     const useCase = new ApplyFixCandidateUseCase(deps);
     const result = await useCase.execute("project-1", fixCandidate.id);
@@ -70,7 +70,7 @@ describe("ApplyFixCandidateUseCase", () => {
     expect(fixCandidate.status).toBe("APPLIED");
     expect(fixCandidate.previousValue).toBe("Old description");
     expect(deps.wordPressClient.updateExcerptCalls).toEqual([
-      { post: { id: 1, postType: "page", currentTitle: "Title", currentExcerpt: "Old description" }, excerpt: "A new description" },
+      { post: { id: 1, postType: "page", currentTitle: "Title", currentExcerpt: "Old description", currentContent: "" }, excerpt: "A new description" },
     ]);
     expect(deps.wordPressClient.updateTitleCalls).toEqual([]);
   });
@@ -171,7 +171,7 @@ describe("ApplyFixCandidateUseCase", () => {
     fixCandidate.markFailed();
     await deps.fixCandidateRepository.saveMany([fixCandidate]);
     deps.wordPressConnectionRepository.seed(WordPressConnection.create("project-1", "https://example.com", "bot", "pw"));
-    deps.wordPressClient.findPostByUrlResult = ok({ id: 1, postType: "page", currentTitle: "Old Title", currentExcerpt: "" });
+    deps.wordPressClient.findPostByUrlResult = ok({ id: 1, postType: "page", currentTitle: "Old Title", currentExcerpt: "", currentContent: "" });
 
     const useCase = new ApplyFixCandidateUseCase(deps);
     const result = await useCase.execute("project-1", fixCandidate.id);

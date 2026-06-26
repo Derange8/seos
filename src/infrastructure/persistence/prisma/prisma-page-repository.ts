@@ -37,6 +37,13 @@ function toDomainRedirectChain(raw: unknown): string[] {
   return raw.filter((entry): entry is string => typeof entry === "string");
 }
 
+// Same defensive coercion again — externalScriptOrigins is also a plain
+// JSON column.
+function toDomainExternalScriptOrigins(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((entry): entry is string => typeof entry === "string");
+}
+
 function toDomain(row: PrismaPageRow & { links: PrismaLinkRow[] }): Page {
   const props: PageProps = {
     id: row.id,
@@ -64,6 +71,8 @@ function toDomain(row: PrismaPageRow & { links: PrismaLinkRow[] }): Page {
     canonicalTagCount: row.canonicalTagCount,
     isNoindex: row.isNoindex,
     isOrphan: row.isOrphan,
+    cspHeader: row.cspHeader,
+    externalScriptOrigins: toDomainExternalScriptOrigins(row.externalScriptOrigins),
   };
 
   const links = row.links.map((linkRow) =>
@@ -105,6 +114,8 @@ export class PrismaPageRepository implements PageRepositoryPort {
       canonicalTagCount: page.canonicalTagCount,
       isNoindex: page.isNoindex,
       isOrphan: page.isOrphan,
+      cspHeader: page.cspHeader,
+      externalScriptOrigins: page.externalScriptOrigins,
       crawledAt: page.crawledAt,
     };
 

@@ -74,21 +74,25 @@ export function toGrowthAnalysisDto(analysis: GrowthAnalysis): GrowthAnalysisDto
 }
 
 export interface PageContentDraftDto {
+  id: string;
   pageUrl: string;
   suggestedTitle: string;
   suggestedMetaDescription: string;
   bodySections: readonly DraftBodySection[];
   faqs: readonly DraftFaq[];
   generatedAt: string;
+  status: string;
 }
 
 export function toPageContentDraftDto(draft: PageContentDraft): PageContentDraftDto {
   return {
+    id: draft.id,
     pageUrl: draft.pageUrl,
     suggestedTitle: draft.suggestedTitle,
     suggestedMetaDescription: draft.suggestedMetaDescription,
     bodySections: draft.bodySections,
     faqs: draft.faqs,
     generatedAt: draft.generatedAt.toISOString(),
+    status: draft.status,
   };
 }

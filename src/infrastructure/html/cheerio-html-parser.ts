@@ -32,8 +32,28 @@ function normalizeWhitespace(text: string): string {
 // line breaks, but that boundary is lost once it's flattened to a string.
 // Forcing a newline after each block tag before extracting text keeps
 // word count/hash/excerpt from running words together.
+//
+// Unlike a browser's innerText, cheerio's .text() does NOT skip <script>/
+// <style> content — it's parsing markup, not rendering it. A page with a
+// JSON-LD <script> in <body> (a common place to put it) would otherwise
+// leak that raw JSON into wordCount/contentHash/contentExcerpt, corrupting
+// thin-content/duplicate-content detection and the meta-description fix
+// generator (which reads contentExcerpt). Removed from a clone, not the
+// shared $ document — detectStructuredData() below still needs the real
+// <script type="application/ld+json"> tags intact.
+//
+// <nav>/<footer> are excluded too — they're chrome repeated on every page
+// of a site (nav links, search shortcut, copyright line), not page-specific
+// content. Left in, they (a) inflate wordCount enough to mask genuinely
+// thin pages, (b) dilute contentHash so real duplicate-content goes
+// undetected on short pages, and (c) get sliced straight into the
+// meta-description fix suggestion via contentExcerpt, producing a
+// suggestion that's mostly nav text. <header> is deliberately NOT excluded
+// — on many sites it wraps a page-specific hero/intro, not just chrome.
 function extractVisibleText($: cheerio.CheerioAPI): string {
-  const bodyHtml = $("body").html() ?? "";
+  const bodyClone = $("body").clone();
+  bodyClone.find("script, style, noscript, nav, footer").remove();
+  const bodyHtml = bodyClone.html() ?? "";
   const withBreaks = bodyHtml.replace(BLOCK_CLOSING_TAGS, "$&\n");
   return cheerio.load(withBreaks)("body").text();
 }
@@ -126,6 +146,22 @@ function countMixedContentResources($: cheerio.CheerioAPI, baseUrl: Url): number
   return count;
 }
 
+// Origin = scheme + host[:port], no path — that's the granularity a CSP
+// script-src source list actually matches against. A same-origin script
+// (no src, or src resolving to baseUrl's own origin) is never blocked by
+// the page's own CSP, so it's deliberately excluded here.
+function extractExternalScriptOrigins($: cheerio.CheerioAPI, baseUrl: Url): string[] {
+  const ownOrigin = new URL(baseUrl.href).origin;
+  const origins = new Set<string>();
+  $("script[src]").each((_index, element) => {
+    const resolved = resolveHref($(element).attr("src"), baseUrl);
+    if (!resolved) return;
+    const origin = new URL(resolved).origin;
+    if (origin !== ownOrigin) origins.add(origin);
+  });
+  return Array.from(origins);
+}
+
 // Directives are comma-separated (e.g. "noindex, nofollow") — splitting and
 // trimming each one avoids a false negative against "noindexfoo" while
 // still matching regardless of surrounding whitespace or casing.
@@ -174,6 +210,7 @@ export class CheerioHtmlParser implements HtmlParserPort {
       h1Count: $("h1").length,
       canonicalTagCount: $('link[rel="canonical"]').length,
       isNoindex: detectNoindex($),
+      externalScriptOrigins: extractExternalScriptOrigins($, baseUrl),
     };
   }
 }

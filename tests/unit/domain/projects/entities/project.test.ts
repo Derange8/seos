@@ -45,8 +45,18 @@ describe("Project", () => {
       domain: domain("example.com"),
       verificationToken: "token-123",
       domainVerifiedAt: verifiedAt,
+      autoPilotEnabled: false,
     });
     expect(project.isVerified).toBe(true);
     expect(project.domainVerifiedAt).toBe(verifiedAt);
+  });
+
+  it("autoPilotEnabled defaults to false and can be toggled", () => {
+    const project = Project.create("My Site", domain("example.com"));
+    expect(project.autoPilotEnabled).toBe(false);
+    project.setAutoPilotEnabled(true);
+    expect(project.autoPilotEnabled).toBe(true);
+    project.setAutoPilotEnabled(false);
+    expect(project.autoPilotEnabled).toBe(false);
   });
 });

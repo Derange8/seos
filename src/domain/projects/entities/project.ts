@@ -22,6 +22,13 @@ export interface ProjectProps {
   domain: DomainName;
   verificationToken: string;
   domainVerifiedAt: Date | null;
+  // "Otomatik Pilot": when on, AutoPilotScheduler re-crawls this project
+  // periodically and AutoApplyApprovedFixesUseCase auto-applies whatever
+  // fix types are already safe to auto-apply unattended (today: the same
+  // TITLE/META_DESCRIPTION WordPress already supports — see
+  // ApplyFixCandidateUseCase's SUPPORTED_FIX_TYPES). Off by default — this
+  // is opt-in autonomy, not a default behavior change.
+  autoPilotEnabled: boolean;
 }
 
 // Single-project desktop program: a verified owner may crawl a domain, but
@@ -37,6 +44,7 @@ export class Project {
       domain,
       verificationToken: crypto.randomUUID(),
       domainVerifiedAt: null,
+      autoPilotEnabled: false,
     });
   }
 
@@ -66,6 +74,14 @@ export class Project {
 
   get isVerified(): boolean {
     return this.props.domainVerifiedAt !== null;
+  }
+
+  get autoPilotEnabled(): boolean {
+    return this.props.autoPilotEnabled;
+  }
+
+  setAutoPilotEnabled(enabled: boolean): void {
+    this.props.autoPilotEnabled = enabled;
   }
 
   // _seos-challenge.<domain> — a dedicated subdomain record name, so the

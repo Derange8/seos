@@ -9,6 +9,7 @@ import { PlaywrightPageRenderer } from "@/infrastructure/crawler/playwright/play
 import { CheerioHtmlParser } from "@/infrastructure/html/cheerio-html-parser";
 import { ConsoleLogger } from "@/infrastructure/logging/console-logger";
 import { startGoogleTrackingScheduler } from "@/infrastructure/scheduling/google-tracking-scheduler";
+import { startAutoPilotScheduler } from "@/infrastructure/scheduling/auto-pilot-scheduler";
 import { InProcessCrawlQueue } from "@/infrastructure/queue/in-process/in-process-crawl-queue";
 import { InProcessRecommendationQueue } from "@/infrastructure/queue/in-process/in-process-recommendation-queue";
 import { ProcessPageTaskUseCase } from "@/application/crawling/use-cases/process-page-task-use-case";
@@ -33,6 +34,9 @@ import { PrismaFixCandidateRepository } from "@/infrastructure/persistence/prism
 import { PrismaKeywordOpportunityRepository } from "@/infrastructure/persistence/prisma/prisma-keyword-opportunity-repository";
 import { GenerateFixCandidatesUseCase } from "@/application/fixes/use-cases/generate-fix-candidates-use-case";
 import { GenerateAuditRecommendationsUseCase } from "@/application/auditing/use-cases/generate-audit-recommendations-use-case";
+import { AutoApplyApprovedFixesUseCase } from "@/application/wordpress/use-cases/auto-apply-approved-fixes-use-case";
+import { PrismaWordPressConnectionRepository } from "@/infrastructure/persistence/prisma/prisma-wordpress-connection-repository";
+import { WordPressRestApiClient } from "@/infrastructure/wordpress/wordpress-rest-api-client";
 import { DynamicRecommendationProvider } from "@/infrastructure/llm/dynamic-recommendation-provider";
 import { PrismaLlmSettingsRepository } from "@/infrastructure/persistence/prisma/prisma-llm-settings-repository";
 import { DomainEventDispatcher } from "@/shared/domain-event-dispatcher";
@@ -106,12 +110,27 @@ export function createCrawlPipeline(
     seoScoreRepository: new PrismaSeoScoreRepository(prisma),
   });
 
+  const fixCandidateRepository = new PrismaFixCandidateRepository(prisma);
+
   const generateFixCandidates = new GenerateFixCandidatesUseCase({
     auditRunRepository,
     pageRepository,
-    fixCandidateRepository: new PrismaFixCandidateRepository(prisma),
+    fixCandidateRepository,
     keywordOpportunityRepository: new PrismaKeywordOpportunityRepository(prisma),
   });
+
+  const autoApplyApprovedFixes = new AutoApplyApprovedFixesUseCase(
+    {
+      auditRunRepository,
+      projectRepository,
+      fixCandidateRepository,
+      pageRepository,
+      crawlJobRepository,
+      wordPressConnectionRepository: new PrismaWordPressConnectionRepository(prisma),
+      wordPressClient: new WordPressRestApiClient({ allowPrivateNetworks: options.allowPrivateNetworks }),
+    },
+    logger
+  );
 
   const recommendationQueue = new InProcessRecommendationQueue(
     options.recommendationConcurrency ?? RECOMMENDATION_CONCURRENCY
@@ -172,6 +191,13 @@ export function createCrawlPipeline(
   eventDispatcher.on(AuditRunCompleted, async (event) => {
     await generateFixCandidates.execute(event.auditRunId);
   });
+  // Must run after generateFixCandidates' own handler above — same
+  // same-event registration-order guarantee DomainEventDispatcher already
+  // relies on elsewhere (see the detectBrokenLinks/runAudit comment) —
+  // there's nothing to auto-apply until this run's FixCandidates exist.
+  eventDispatcher.on(AuditRunCompleted, async (event) => {
+    await autoApplyApprovedFixes.execute(event.auditRunId);
+  });
   eventDispatcher.on(AuditRunCompleted, async (event) => {
     await recommendationQueue.enqueue(event.auditRunId);
   });
@@ -200,7 +226,11 @@ export function createCrawlPipeline(
   return { crawlQueue };
 }
 
-const globalForPipeline = globalThis as unknown as { crawlPipeline?: CrawlPipeline; googleTrackingSchedulerStarted?: boolean };
+const globalForPipeline = globalThis as unknown as {
+  crawlPipeline?: CrawlPipeline;
+  googleTrackingSchedulerStarted?: boolean;
+  autoPilotSchedulerStarted?: boolean;
+};
 
 // Same singleton rationale as prisma-client.ts — one pipeline (and its
 // in-process queues) shared across requests in this process, surviving
@@ -220,4 +250,9 @@ export const crawlQueue = crawlPipeline.crawlQueue;
 if (!globalForPipeline.googleTrackingSchedulerStarted) {
   startGoogleTrackingScheduler(new ConsoleLogger());
   globalForPipeline.googleTrackingSchedulerStarted = true;
+}
+
+if (!globalForPipeline.autoPilotSchedulerStarted) {
+  startAutoPilotScheduler(crawlQueue, new ConsoleLogger());
+  globalForPipeline.autoPilotSchedulerStarted = true;
 }

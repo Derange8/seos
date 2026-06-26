@@ -83,5 +83,7 @@ describe("ComputeAuditDeltaUseCase", () => {
     expect(delta?.currentRunId).toBe(auditRunB.id);
     expect(delta?.resolvedCount).toBe(1);
     expect(delta?.newCount).toBe(1);
+    expect(delta?.previousPageCount).toBe(1);
+    expect(delta?.currentPageCount).toBe(1);
   });
 });

@@ -22,6 +22,7 @@ interface WordPressPostListItem {
   id: number;
   title: { raw?: string; rendered: string };
   excerpt: { raw?: string; rendered: string };
+  content: { raw?: string; rendered: string };
 }
 
 interface RawResponse {
@@ -82,6 +83,7 @@ export class WordPressRestApiClient implements WordPressClientPort {
           postType: postType === "pages" ? "page" : "post",
           currentTitle: item.title.raw ?? item.title.rendered,
           currentExcerpt: item.excerpt.raw ?? item.excerpt.rendered,
+          currentContent: item.content.raw ?? item.content.rendered,
         });
       }
     }
@@ -115,6 +117,22 @@ export class WordPressRestApiClient implements WordPressClientPort {
 
     const collection = post.postType === "page" ? "pages" : "posts";
     const response = await this.request(connection, "POST", `/wp/v2/${collection}/${post.id}`, { excerpt });
+    if (!response.ok) return response;
+
+    const error = this.toClientError(response.value.status, ` while updating ${post.postType} ${post.id}`);
+    return error ? err(error) : ok(undefined);
+  }
+
+  async updateContent(
+    connection: WordPressConnection,
+    post: WordPressPostRef,
+    content: string
+  ): Promise<Result<void, WordPressClientError>> {
+    const guardResult = await this.guardAgainstPrivateNetwork(connection.siteUrl);
+    if (!guardResult.ok) return guardResult;
+
+    const collection = post.postType === "page" ? "pages" : "posts";
+    const response = await this.request(connection, "POST", `/wp/v2/${collection}/${post.id}`, { content });
     if (!response.ok) return response;
 
     const error = this.toClientError(response.value.status, ` while updating ${post.postType} ${post.id}`);

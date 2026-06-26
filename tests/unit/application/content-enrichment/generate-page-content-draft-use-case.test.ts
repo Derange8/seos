@@ -57,7 +57,7 @@ async function deps(
     overrides.pageContentDraft ?? ({ generateDraft: vi.fn().mockResolvedValue(fakeResult()) } as PageContentDraftPort);
   const pageContentDraftRepository: PageContentDraftRepositoryPort =
     overrides.pageContentDraftRepository ??
-    ({ save: vi.fn().mockResolvedValue(undefined), findByProjectId: vi.fn() } as PageContentDraftRepositoryPort);
+    ({ save: vi.fn().mockResolvedValue(undefined), findByProjectId: vi.fn(), findById: vi.fn() } as PageContentDraftRepositoryPort);
 
   return { crawlJobRepository, pageRepository: pageRepoWith(page), pageContentDraft, pageContentDraftRepository };
 }

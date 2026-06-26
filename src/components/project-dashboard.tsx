@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/use-language";
 import type { ProjectDto } from "@/application/projects/dto";
 import type { CrawlJobDto, PageDto } from "@/application/crawling/dto";
-import type { AuditRunDto } from "@/application/auditing/dto";
+import type { AuditIssueDto, AuditRunDto } from "@/application/auditing/dto";
 import type { SitemapFileDto } from "@/application/sitemap/dto";
 import type { LlmsTxtFileDto } from "@/application/llms-txt/dto";
 import type { RobotsFileDto } from "@/application/robots/dto";
@@ -112,6 +112,23 @@ const TRANSLATIONS = {
   revert: { en: "Revert", tr: "Geri al" },
   reverting: { en: "Reverting…", tr: "Geri alınıyor…" },
   viewIssuesAndFixes: { en: "View issues & fixes →", tr: "Sorunları & düzeltmeleri gör →" },
+  cardAutoPilot: { en: "Otomatik Pilot", tr: "Otomatik Pilot" },
+  autoPilotDescription: {
+    en: "When on, this project re-crawls itself daily and automatically applies Title/Meta description fixes to your connected WordPress site — every other fix type stays manual.",
+    tr: "Açıkken bu proje her gün kendini yeniden tarar ve bağlı WordPress sitenizdeki Title/Meta description düzeltmelerini otomatik uygular — diğer tüm düzeltme tipleri manuel kalır.",
+  },
+  autoPilotNoWordPress: {
+    en: "Re-crawling will run daily; connect WordPress above to also enable auto-apply.",
+    tr: "Yeniden tarama her gün çalışacak; otomatik uygulamayı açmak için yukarıdan WordPress'e bağlanın.",
+  },
+  autoPilotOn: { en: "On", tr: "Açık" },
+  autoPilotOff: { en: "Off", tr: "Kapalı" },
+  autoPilotUpdating: { en: "Updating…", tr: "Güncelleniyor…" },
+  publish: { en: "Publish to WordPress", tr: "WordPress'e yayınla" },
+  publishing: { en: "Publishing…", tr: "Yayınlanıyor…" },
+  published: { en: "Published", tr: "Yayınlandı" },
+  publishFailed: { en: "Publish failed", tr: "Yayınlama başarısız" },
+  draftNeedsWordPress: { en: "Connect WordPress above to publish this draft directly.", tr: "Bu taslağı doğrudan yayınlamak için yukarıdan WordPress'e bağlanın." },
 } as const;
 type TranslationKey = keyof typeof TRANSLATIONS;
 
@@ -189,10 +206,17 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [isConnectingWordPress, setIsConnectingWordPress] = useState(false);
   const [isDisconnectingWordPress, setIsDisconnectingWordPress] = useState(false);
   const [wordPressError, setWordPressError] = useState<string | null>(null);
+  const [isUpdatingAutoPilot, setIsUpdatingAutoPilot] = useState(false);
   // Per-fix, not global — applying/reverting one fix candidate shouldn't
   // disable the buttons on every other one.
   const [fixActionPendingId, setFixActionPendingId] = useState<string | null>(null);
   const [fixActionErrors, setFixActionErrors] = useState<Record<string, string>>({});
+  // Which rule-id groups are expanded in the Issues tab — the same
+  // underlying defect (e.g. a client-rendered page template) often fires
+  // the same rule on a dozen pages, and a flat list of 184 individual
+  // findings reads as 184 distinct problems rather than ~10 real ones.
+  // Groups with only one affected page render without a toggle at all.
+  const [expandedRuleIds, setExpandedRuleIds] = useState<Set<string>>(new Set());
 
   const [googleStatus, setGoogleStatus] = useState<GoogleStatusDto>({ connected: false });
   const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
@@ -221,6 +245,8 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [generatingDraft, setGeneratingDraft] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [copiedDraftUrl, setCopiedDraftUrl] = useState<string | null>(null);
+  const [draftActionPendingId, setDraftActionPendingId] = useState<string | null>(null);
+  const [draftActionErrors, setDraftActionErrors] = useState<Record<string, string>>({});
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -483,6 +509,52 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     setContentDrafts((drafts) => [data, ...drafts.filter((d) => d.pageUrl !== data.pageUrl)]);
   }
 
+  async function handlePublishDraft(draftId: string) {
+    setDraftActionPendingId(draftId);
+    setDraftActionErrors((errors) => ({ ...errors, [draftId]: "" }));
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${project.id}/content-draft/${draftId}/publish`, { method: "POST" });
+    } catch {
+      setDraftActionPendingId(null);
+      setDraftActionErrors((errors) => ({ ...errors, [draftId]: "Network error — check your connection and try again." }));
+      return;
+    }
+    const data = await response.json();
+
+    setDraftActionPendingId(null);
+    if (!response.ok) {
+      setDraftActionErrors((errors) => ({ ...errors, [draftId]: data.error ?? "Failed to publish draft" }));
+      return;
+    }
+
+    setContentDrafts((drafts) => drafts.map((draft) => (draft.id === draftId ? data : draft)));
+  }
+
+  async function handleRevertDraft(draftId: string) {
+    setDraftActionPendingId(draftId);
+    setDraftActionErrors((errors) => ({ ...errors, [draftId]: "" }));
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${project.id}/content-draft/${draftId}/revert`, { method: "POST" });
+    } catch {
+      setDraftActionPendingId(null);
+      setDraftActionErrors((errors) => ({ ...errors, [draftId]: "Network error — check your connection and try again." }));
+      return;
+    }
+    const data = await response.json();
+
+    setDraftActionPendingId(null);
+    if (!response.ok) {
+      setDraftActionErrors((errors) => ({ ...errors, [draftId]: data.error ?? "Failed to revert draft" }));
+      return;
+    }
+
+    setContentDrafts((drafts) => drafts.map((draft) => (draft.id === draftId ? data : draft)));
+  }
+
   function formatDraftForCopy(draft: PageContentDraftDto): string {
     const sections = draft.bodySections.map((s) => `## ${s.heading}\n${s.content}`).join("\n\n");
     const faqs = draft.faqs.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
@@ -659,6 +731,26 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       console.error("Failed to disconnect WordPress", error);
     } finally {
       setIsDisconnectingWordPress(false);
+    }
+  }
+
+  async function handleToggleAutoPilot() {
+    const nextValue = !project.autoPilotEnabled;
+    setIsUpdatingAutoPilot(true);
+    try {
+      const response = await fetch(`/api/v1/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autoPilotEnabled: nextValue }),
+      });
+      if (response.ok) {
+        const data: ProjectDto = await response.json();
+        setProject(data);
+      }
+    } catch (error) {
+      console.error("Failed to update Otomatik Pilot", error);
+    } finally {
+      setIsUpdatingAutoPilot(false);
     }
   }
 
@@ -874,6 +966,34 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     setFixCandidates((candidates) => candidates.map((candidate) => (candidate.id === fixId ? data : candidate)));
   }
 
+  function toggleRuleExpanded(ruleId: string) {
+    setExpandedRuleIds((current) => {
+      const next = new Set(current);
+      if (next.has(ruleId)) next.delete(ruleId);
+      else next.add(ruleId);
+      return next;
+    });
+  }
+
+  // Preserves first-seen order (already roughly priority-sorted by the
+  // backend) rather than re-sorting groups by size — a CRITICAL rule
+  // affecting 2 pages should still surface above an INFO rule affecting 20.
+  const issueGroups = useMemo(() => {
+    if (!auditRun) return [];
+    const order: string[] = [];
+    const byRule = new Map<string, AuditIssueDto[]>();
+    for (const issue of auditRun.issues) {
+      const existing = byRule.get(issue.ruleId);
+      if (existing) {
+        existing.push(issue);
+      } else {
+        byRule.set(issue.ruleId, [issue]);
+        order.push(issue.ruleId);
+      }
+    }
+    return order.map((ruleId) => ({ ruleId, issues: byRule.get(ruleId) ?? [] }));
+  }, [auditRun]);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -1079,6 +1199,16 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                     </span>
                   )}
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  {delta.previousPageCount} → {delta.currentPageCount} pages crawled
+                  {delta.currentPageCount !== delta.previousPageCount && (
+                    <>
+                      {" — "}
+                      score is a per-page average, so a deeper crawl can shift the issue count a lot while the score
+                      barely moves
+                    </>
+                  )}
+                </p>
                 <div className="flex gap-4 text-xs text-muted-foreground">
                   <p>{delta.resolvedCount} resolved</p>
                   <p>{delta.newCount} new</p>
@@ -1194,11 +1324,31 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                   {auditRun.issues.length} issue{auditRun.issues.length === 1 ? "" : "s"}
                 </p>
                 {auditRun.issues.length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    {auditRun.issues.map((issue) => {
-                      const fix = fixCandidates.find((candidate) => candidate.auditIssueId === issue.id);
+                  <div className="flex flex-col gap-3">
+                    {issueGroups.map((group) => {
+                      const isCluster = group.issues.length > 1;
+                      const isExpanded = !isCluster || expandedRuleIds.has(group.ruleId);
                       return (
-                        <div key={issue.id} className="flex items-start justify-between gap-3 border-b py-1">
+                        <div key={group.ruleId} className="flex flex-col gap-2">
+                          {isCluster && (
+                            <button
+                              type="button"
+                              onClick={() => toggleRuleExpanded(group.ruleId)}
+                              className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left text-xs text-muted-foreground hover:bg-white/10"
+                            >
+                              <span>
+                                <span className="font-medium text-foreground">{group.ruleId}</span>
+                                {" — "}
+                                {group.issues.length} pages affected by the same underlying issue
+                              </span>
+                              <span>{isExpanded ? "Hide" : "Show"} pages</span>
+                            </button>
+                          )}
+                          {isExpanded &&
+                            group.issues.map((issue) => {
+                              const fix = fixCandidates.find((candidate) => candidate.auditIssueId === issue.id);
+                              return (
+                                <div key={issue.id} className="flex items-start justify-between gap-3 border-b py-1">
                           <div>
                             <p>{issue.message}</p>
                             <p className="text-xs text-muted-foreground">
@@ -1309,6 +1459,9 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                                 : " (no data yet)"}
                             </span>
                           </div>
+                                </div>
+                              );
+                            })}
                         </div>
                       );
                     })}
@@ -1494,6 +1647,8 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
               <CardHeader>
                 <CardTitle className="truncate" title={draft.pageUrl}>
                   Draft · {draft.pageUrl}
+                  {draft.status === "PUBLISHED" && <span className="ml-2 text-green-400">{t("published")}</span>}
+                  {draft.status === "FAILED" && <span className="ml-2 text-red-400">{t("publishFailed")}</span>}
                 </CardTitle>
                 <CardAction>
                   <Button
@@ -1516,6 +1671,30 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                   <p className="mt-2 text-xs text-muted-foreground">Meta description</p>
                   <p>{draft.suggestedMetaDescription}</p>
                 </div>
+                {!wordPressConnection && <p className="text-xs text-muted-foreground/70">{t("draftNeedsWordPress")}</p>}
+                {draftActionErrors[draft.id] && <p className="text-xs text-red-400">{draftActionErrors[draft.id]}</p>}
+                {wordPressConnection && (
+                  <div>
+                    {draft.status !== "PUBLISHED" ? (
+                      <Button
+                        size="sm"
+                        disabled={draftActionPendingId === draft.id}
+                        onClick={() => handlePublishDraft(draft.id)}
+                      >
+                        {draftActionPendingId === draft.id ? t("publishing") : t("publish")}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={draftActionPendingId === draft.id}
+                        onClick={() => handleRevertDraft(draft.id)}
+                      >
+                        {draftActionPendingId === draft.id ? t("reverting") : t("revert")}
+                      </Button>
+                    )}
+                  </div>
+                )}
                 {draft.bodySections.map((section, index) => (
                   <div key={index}>
                     <p className="font-medium">{section.heading}</p>
@@ -1598,6 +1777,33 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                   </Button>
                 </form>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("cardAutoPilot")}</CardTitle>
+              <CardAction>
+                <Badge variant={project.autoPilotEnabled ? "default" : "secondary"}>
+                  {project.autoPilotEnabled ? t("autoPilotOn") : t("autoPilotOff")}
+                </Badge>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 text-sm">
+              <p className="text-muted-foreground">{t("autoPilotDescription")}</p>
+              {!wordPressConnection && <p className="text-muted-foreground">{t("autoPilotNoWordPress")}</p>}
+              <Button
+                variant={project.autoPilotEnabled ? "outline" : "default"}
+                className="self-start"
+                onClick={handleToggleAutoPilot}
+                disabled={isUpdatingAutoPilot}
+              >
+                {isUpdatingAutoPilot
+                  ? t("autoPilotUpdating")
+                  : project.autoPilotEnabled
+                    ? t("autoPilotOff")
+                    : t("autoPilotOn")}
+              </Button>
             </CardContent>
           </Card>
 

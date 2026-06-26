@@ -29,9 +29,11 @@ export class FakeWordPressClient implements WordPressClientPort {
   findPostByUrlResult: Result<WordPressPostRef, WordPressClientError> = err(new WordPressUnreachableError("not configured"));
   updateTitleResult: Result<void, WordPressClientError> = ok(undefined);
   updateExcerptResult: Result<void, WordPressClientError> = ok(undefined);
+  updateContentResult: Result<void, WordPressClientError> = ok(undefined);
 
   readonly updateTitleCalls: Array<{ post: WordPressPostRef; title: string }> = [];
   readonly updateExcerptCalls: Array<{ post: WordPressPostRef; excerpt: string }> = [];
+  readonly updateContentCalls: Array<{ post: WordPressPostRef; content: string }> = [];
 
   async testConnection(): Promise<Result<void, WordPressClientError>> {
     return this.testConnectionResult;
@@ -49,5 +51,10 @@ export class FakeWordPressClient implements WordPressClientPort {
   async updateExcerpt(_connection: WordPressConnection, post: WordPressPostRef, excerpt: string): Promise<Result<void, WordPressClientError>> {
     this.updateExcerptCalls.push({ post, excerpt });
     return this.updateExcerptResult;
+  }
+
+  async updateContent(_connection: WordPressConnection, post: WordPressPostRef, content: string): Promise<Result<void, WordPressClientError>> {
+    this.updateContentCalls.push({ post, content });
+    return this.updateContentResult;
   }
 }

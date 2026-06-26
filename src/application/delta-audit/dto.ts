@@ -14,6 +14,8 @@ export interface AuditDeltaDto {
   previousScore: number | null;
   currentScore: number | null;
   scoreDelta: number | null;
+  previousPageCount: number;
+  currentPageCount: number;
   resolvedCount: number;
   newCount: number;
   persistingCount: number;
@@ -27,6 +29,8 @@ export function toAuditDeltaDto(delta: AuditDelta): AuditDeltaDto {
     previousScore: delta.previousScore,
     currentScore: delta.currentScore,
     scoreDelta: delta.scoreDelta,
+    previousPageCount: delta.previousPageCount,
+    currentPageCount: delta.currentPageCount,
     resolvedCount: delta.resolvedCount,
     newCount: delta.newCount,
     persistingCount: delta.persistingCount,

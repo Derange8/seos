@@ -36,6 +36,7 @@ export class RunAuditUseCase {
     for (const page of pages) {
       for (const rule of this.rules) {
         if (page.isBroken() && !rule.appliesToFailedPages) continue;
+        if (page.isNoindex && !rule.appliesToNoindexPages) continue;
         for (const finding of rule.evaluate(page)) {
           auditRun.addIssue(AuditIssue.create(auditRun.id, page.id, finding));
         }

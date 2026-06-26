@@ -4,4 +4,7 @@ export interface PageContentDraftRepositoryPort {
   // One row per (project, page) — regenerating a page's draft overwrites it.
   save(draft: PageContentDraft): Promise<void>;
   findByProjectId(projectId: string): Promise<PageContentDraft[]>;
+  // PublishPageContentDraftUseCase/RevertPageContentDraftUseCase look a
+  // single draft up by id, mirroring FixCandidateRepositoryPort.findById.
+  findById(id: string): Promise<PageContentDraft | null>;
 }

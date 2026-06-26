@@ -30,8 +30,8 @@ export class ComputeAuditDeltaUseCase {
     for (const page of currentPages) pageUrlsByPageId.set(page.id, page.url.href);
 
     return computeAuditDelta(
-      { runId: previous.id, overallScore: previous.overallScore, issues: previous.issues },
-      { runId: current.id, overallScore: current.overallScore, issues: current.issues },
+      { runId: previous.id, overallScore: previous.overallScore, pageCount: previousPages.length, issues: previous.issues },
+      { runId: current.id, overallScore: current.overallScore, pageCount: currentPages.length, issues: current.issues },
       pageUrlsByPageId
     );
   }

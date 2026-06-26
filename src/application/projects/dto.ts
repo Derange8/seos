@@ -9,6 +9,7 @@ export interface ProjectDto {
   verificationToken: string;
   dnsTxtRecordName: string;
   wellKnownFileUrl: string;
+  autoPilotEnabled: boolean;
 }
 
 export function toProjectDto(project: Project): ProjectDto {
@@ -21,5 +22,6 @@ export function toProjectDto(project: Project): ProjectDto {
     verificationToken: project.verificationToken,
     dnsTxtRecordName: project.dnsTxtRecordName,
     wellKnownFileUrl: project.wellKnownFileUrl,
+    autoPilotEnabled: project.autoPilotEnabled,
   };
 }

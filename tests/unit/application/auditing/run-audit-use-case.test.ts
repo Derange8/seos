@@ -81,6 +81,31 @@ describe("RunAuditUseCase", () => {
     expect(ruleIds).toEqual(["broken-status-code"]);
   });
 
+  it("skips content-quality rules for a noindex page, but still reports noindex/technical findings", async () => {
+    const pageRepository = new FakePageRepository();
+    await pageRepository.save(
+      "project-1",
+      Page.create("job-1", url("https://example.com/dashboard"), {
+        title: null,
+        statusCode: 200,
+        wordCount: 5,
+        isNoindex: true,
+        mixedContentCount: 1,
+      })
+    );
+
+    const auditRunRepository = new FakeAuditRunRepository();
+    const useCase = new RunAuditUseCase({ pageRepository, auditRunRepository });
+
+    const auditRun = await useCase.execute("project-1", "job-1");
+
+    const ruleIds = auditRun.issues.map((issue) => issue.ruleId);
+    expect(ruleIds).toContain("noindex");
+    expect(ruleIds).toContain("mixed-content");
+    expect(ruleIds).not.toContain("missing-title");
+    expect(ruleIds).not.toContain("thin-content");
+  });
+
   it("still runs rules normally for a page with no statusCode recorded yet (null, not a known failure)", async () => {
     const pageRepository = new FakePageRepository();
     await pageRepository.save(

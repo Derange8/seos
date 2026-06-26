@@ -10,6 +10,7 @@ const SLOW_THRESHOLD_MS = 2000;
 
 export const slowResponseTimeRule: AuditRule = {
   id: "slow-response-time",
+  appliesToNoindexPages: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.responseTimeMs === null || page.responseTimeMs < SLOW_THRESHOLD_MS) return [];
     return [

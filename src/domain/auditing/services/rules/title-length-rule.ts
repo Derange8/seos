@@ -1,6 +1,7 @@
 import type { AuditRule } from "@/domain/auditing/services/audit-rule";
 import type { AuditFinding } from "@/domain/auditing/entities/audit-issue";
 import type { Page } from "@/domain/crawling/entities/page";
+import { estimateTextWidth } from "@/domain/auditing/services/text-width-estimator";
 
 // Exported so the fix engine (src/domain/fixes/) can target the same range
 // when generating a replacement title — one source of truth.
@@ -17,7 +18,14 @@ export const titleLengthRule: AuditRule = {
     const title = page.title?.trim();
     if (!title) return [];
 
-    if (title.length < MIN_LENGTH) {
+    // Boundary check uses estimated rendered width (see
+    // text-width-estimator.ts), not raw character count — a title can sit
+    // outside the character range and still render fine, or vice versa.
+    // The message still reports the real character count since that's
+    // what a person looks at and edits.
+    const width = estimateTextWidth(title);
+
+    if (width < MIN_LENGTH) {
       return [
         {
           ruleId: "title-length",
@@ -27,7 +35,7 @@ export const titleLengthRule: AuditRule = {
         },
       ];
     }
-    if (title.length > MAX_LENGTH) {
+    if (width > MAX_LENGTH) {
       return [
         {
           ruleId: "title-length",

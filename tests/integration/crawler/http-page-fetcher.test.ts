@@ -154,6 +154,34 @@ describe("HttpPageFetcher", () => {
     }
   });
 
+  it("captures the Content-Security-Policy response header when present", async () => {
+    const server = await startServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/html", "content-security-policy": "default-src 'self'" });
+      res.end("<html><body>hello</body></html>");
+    });
+    cleanup = server.close;
+
+    const fetcher = new HttpPageFetcher({ timeoutMs: 2000, allowPrivateNetworks: true });
+    const result = await fetcher.fetch(url(server.origin));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.cspHeader).toBe("default-src 'self'");
+  });
+
+  it("returns a null cspHeader when the response has no CSP header", async () => {
+    const server = await startServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end("<html><body>hello</body></html>");
+    });
+    cleanup = server.close;
+
+    const fetcher = new HttpPageFetcher({ timeoutMs: 2000, allowPrivateNetworks: true });
+    const result = await fetcher.fetch(url(server.origin));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.cspHeader).toBeNull();
+  });
+
   it("treats a non-2xx status as a successful fetch result, not a port error", async () => {
     const server = await startServer((_req, res) => {
       res.writeHead(404);

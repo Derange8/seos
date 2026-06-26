@@ -5,6 +5,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 export const brokenStatusCodeRule: AuditRule = {
   id: "broken-status-code",
   appliesToFailedPages: true,
+  appliesToNoindexPages: true,
   evaluate(page: Page): AuditFinding[] {
     if (!page.isBroken()) return [];
     return [

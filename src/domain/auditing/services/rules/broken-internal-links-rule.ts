@@ -9,6 +9,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 // order (see crawl-pipeline.ts).
 export const brokenInternalLinksRule: AuditRule = {
   id: "broken-internal-links",
+  appliesToNoindexPages: true,
   evaluate(page: Page): AuditFinding[] {
     const brokenLinks = page.allLinks.filter((link) => link.isInternal && link.isBroken);
     if (brokenLinks.length === 0) return [];

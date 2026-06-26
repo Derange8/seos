@@ -17,5 +17,15 @@ export interface AuditRule {
   // failure) still runs normally. Only a rule that specifically reports ON
   // the failure itself (broken-status-code) needs to opt back in.
   readonly appliesToFailedPages?: boolean;
+  // Same reasoning as appliesToFailedPages, for a different kind of
+  // "this page was never going to rank" page: one its own <meta
+  // name="robots" content="noindex"> deliberately excludes from search
+  // results (a login-gated dashboard, a thank-you page). Optimizing its
+  // title/meta description/word count is moot if Google won't index it —
+  // so content-quality rules skip noindex pages by default. Technical/
+  // accessibility/security rules (broken links, slow response, missing
+  // alt text, mixed content) still matter regardless of indexability and
+  // opt back in, same as broken-status-code does for failed pages.
+  readonly appliesToNoindexPages?: boolean;
   evaluate(page: Page): AuditFinding[];
 }

@@ -64,8 +64,8 @@ export class FakePageRepository implements PageRepositoryPort {
     return null;
   }
 
-  async findAllByCrawlJobId(): Promise<Page[]> {
-    return this.saved.map((entry) => entry.page);
+  async findAllByCrawlJobId(crawlJobId: string): Promise<Page[]> {
+    return this.saved.filter((entry) => entry.page.crawlJobId === crawlJobId).map((entry) => entry.page);
   }
 
   async countByCrawlJobId(): Promise<number> {
@@ -144,6 +144,7 @@ export function emptyParsedContent(overrides: Partial<ParsedPageContent> = {}): 
     h1Count: 0,
     canonicalTagCount: 0,
     isNoindex: false,
+    externalScriptOrigins: [],
     ...overrides,
   };
 }
@@ -156,6 +157,7 @@ export function fetchOk(overrides: Partial<PageFetchResult> = {}, finalUrl: Page
     responseTimeMs: 10,
     redirectChain: [],
     renderMode: "HTTP",
+    cspHeader: null,
     ...overrides,
   });
 }

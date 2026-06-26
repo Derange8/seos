@@ -7,6 +7,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 // mistake, so it's worth surfacing rather than staying silent.
 export const noindexRule: AuditRule = {
   id: "noindex",
+  appliesToNoindexPages: true,
   evaluate(page: Page): AuditFinding[] {
     if (!page.isNoindex) return [];
     return [
