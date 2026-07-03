@@ -42,6 +42,7 @@ model Project {
   contentIdeas            ContentIdea[]
   growthAnalysis          GrowthAnalysis?
   pageContentDrafts       PageContentDraft[]
+  aiVisibilityProbeRuns   AiVisibilityProbeRun[]
   createdAt               DateTime                    @default(now())
 
   @@map("projects")
@@ -524,6 +525,24 @@ model CtrUnderperformer {
   @@unique([projectId, pageUrl, query])
   @@index([projectId])
   @@map("ctr_underperformers")
+}
+
+// One AI-visibility measurement run: for each buyer-intent query, N model
+// samples classified MENTIONED / CONTESTED / OPEN (see the ai-visibility
+// bounded context). Append-only history (like AuditRun/SitemapFile) so the
+// dashboard can show a visibility trend over time.
+model AiVisibilityProbeRun {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  samplesPerQuery Int
+  // Array of { query, slots: string[], competitorsMentioned: string[] } —
+  // see QueryOutcome. Plain JSON, not type-checked by the DB.
+  outcomes        Json
+  runAt           DateTime @default(now())
+
+  @@index([projectId])
+  @@map("ai_visibility_probe_runs")
 }
 
 // Real per-page GSC totals (unfiltered) — a byproduct of the same

@@ -22,6 +22,7 @@ import type { AuditDeltaDto } from "@/application/delta-audit/dto";
 import type { WordPressConnectionDto } from "@/application/wordpress/dto";
 import type { SearchPerformanceSnapshotDto, AnalyticsSnapshotDto, KeywordOpportunityDto, KeywordCannibalizationIssueDto, CtrUnderperformerDto } from "@/application/tracking/dto";
 import type { ContentIdeaDto, GrowthAnalysisDto, PageContentDraftDto } from "@/application/content-enrichment/dto";
+import type { AiVisibilityRunDto } from "@/application/ai-visibility/dto";
 import { formatAuditReport } from "@/lib/format-audit-report";
 
 type KeywordOpportunityRow = KeywordOpportunityDto & { suggestion: string | null };
@@ -88,6 +89,7 @@ const TRANSLATIONS = {
   cardAuditScore: { en: "Audit Score", tr: "Denetim Skoru" },
   cardTrend: { en: "Trend", tr: "Trend" },
   cardAudit: { en: "Audit", tr: "Denetim" },
+  cardAiVisibility: { en: "AI Visibility", tr: "AI Görünürlük" },
   cardWordPress: { en: "WordPress", tr: "WordPress" },
   cardSearchPerformance: { en: "Search Performance", tr: "Arama Performansı" },
   cardRobots: { en: "Robots.txt", tr: "Robots.txt" },
@@ -242,6 +244,12 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [isGeneratingGrowthAnalysis, setIsGeneratingGrowthAnalysis] = useState(false);
   const [growthAnalysisError, setGrowthAnalysisError] = useState<string | null>(null);
 
+  const [aiVisibility, setAiVisibility] = useState<AiVisibilityRunDto | null>(null);
+  const [isProbingAiVisibility, setIsProbingAiVisibility] = useState(false);
+  const [aiVisibilityError, setAiVisibilityError] = useState<string | null>(null);
+  const [aiVisibilityQueries, setAiVisibilityQueries] = useState("");
+  const [aiVisibilityCompetitors, setAiVisibilityCompetitors] = useState("");
+
   const [contentDrafts, setContentDrafts] = useState<PageContentDraftDto[]>([]);
   const [draftPageUrl, setDraftPageUrl] = useState("");
   const [generatingDraft, setGeneratingDraft] = useState(false);
@@ -293,6 +301,16 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       .then((response) => (response.ok ? response.json() : null))
       .then((data: GrowthAnalysisDto | null) => setGrowthAnalysis(data))
       .catch((error: unknown) => console.error("Failed to fetch growth analysis", error));
+  }, [project.id]);
+
+  // Latest stored AI-visibility probe, if any — read-only on mount, same as
+  // growth analysis above. A fresh probe is only run when the user clicks
+  // Measure (a real, multi-call LLM cost).
+  useEffect(() => {
+    fetch(`/api/v1/projects/${project.id}/ai-visibility`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: AiVisibilityRunDto | null) => setAiVisibility(data))
+      .catch((error: unknown) => console.error("Failed to fetch AI visibility run", error));
   }, [project.id]);
 
   useEffect(() => {
@@ -461,6 +479,45 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     }
 
     setContentIdeas(data);
+  }
+
+  async function handleRunAiVisibilityProbe() {
+    const queries = aiVisibilityQueries
+      .split("\n")
+      .map((q) => q.trim())
+      .filter((q) => q.length > 0);
+    if (queries.length === 0) {
+      setAiVisibilityError("Enter at least one target query (one per line).");
+      return;
+    }
+    const competitors = aiVisibilityCompetitors
+      .split(",")
+      .map((c) => c.trim())
+      .filter((c) => c.length > 0);
+
+    setIsProbingAiVisibility(true);
+    setAiVisibilityError(null);
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${project.id}/ai-visibility`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ queries, competitors }),
+      });
+    } catch {
+      setIsProbingAiVisibility(false);
+      setAiVisibilityError("Network error — check your connection and try again.");
+      return;
+    }
+    const data = await response.json();
+
+    setIsProbingAiVisibility(false);
+    if (!response.ok) {
+      setAiVisibilityError(data.error ?? "Failed to run the AI visibility probe");
+      return;
+    }
+    setAiVisibility(data);
   }
 
   async function handleGenerateGrowthAnalysis() {
@@ -1485,6 +1542,92 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
 
       {activeTab === "growth" && (
         <div className="flex flex-col gap-5">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("cardAiVisibility")}</CardTitle>
+              <CardAction>
+                <Button onClick={handleRunAiVisibilityProbe} disabled={isProbingAiVisibility} size="sm">
+                  {isProbingAiVisibility ? "Measuring…" : aiVisibility ? "Re-measure" : "Measure"}
+                </Button>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 text-sm">
+              <p className="text-muted-foreground">
+                Measures whether AI answer engines (e.g. ChatGPT) recommend your site for buyer-intent
+                queries — the discovery layer no classic SEO tool sees. Enter the queries a customer might ask
+                an assistant, one per line. Each is sampled several times, so this can take a minute.
+              </p>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="ai-visibility-queries">Target queries (one per line)</Label>
+                <textarea
+                  id="ai-visibility-queries"
+                  value={aiVisibilityQueries}
+                  onChange={(e) => setAiVisibilityQueries(e.target.value)}
+                  rows={4}
+                  placeholder={"best prediction market platform\nTürkçe tahmin piyasası uygulaması"}
+                  className="rounded-md border border-white/10 bg-black/20 p-2 font-mono text-xs"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="ai-visibility-competitors">Known competitors (comma-separated, optional)</Label>
+                <Input
+                  id="ai-visibility-competitors"
+                  value={aiVisibilityCompetitors}
+                  onChange={(e) => setAiVisibilityCompetitors(e.target.value)}
+                  placeholder="Polymarket, Kalshi, Manifold"
+                />
+              </div>
+              {aiVisibilityError && <p className="text-red-400">{aiVisibilityError}</p>}
+              {!aiVisibility && !aiVisibilityError && (
+                <p className="text-muted-foreground">No probe run yet for this project.</p>
+              )}
+              {aiVisibility && (
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    <span className="text-green-400">✅ Mentioned {aiVisibility.scorecard.mentionedPct}%</span>
+                    <span className="text-cyan-300">🟢 Open {aiVisibility.scorecard.openPct}%</span>
+                    <span className="text-muted-foreground">⛔ Contested {aiVisibility.scorecard.contestedPct}%</span>
+                    <span className="text-muted-foreground">
+                      ({aiVisibility.scorecard.totalSamples} samples · {new Date(aiVisibility.runAt).toLocaleString()})
+                    </span>
+                  </div>
+                  {aiVisibility.scorecard.competitorFrequency.length > 0 && (
+                    <p className="text-muted-foreground">
+                      Competitors dominating:{" "}
+                      {aiVisibility.scorecard.competitorFrequency.map((c) => `${c.name} (${c.queryCount})`).join(", ")}
+                    </p>
+                  )}
+                  {aiVisibility.scorecard.winnableQueries.length > 0 && (
+                    <div>
+                      <p className="text-cyan-300">Winnable queries (no incumbent yet):</p>
+                      <ul className="list-disc pl-5 text-muted-foreground">
+                        {aiVisibility.scorecard.winnableQueries.map((q) => (
+                          <li key={q}>{q}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-1">
+                    {aiVisibility.queries.map((q) => (
+                      <div
+                        key={q.query}
+                        className="flex items-center justify-between gap-2 border-b border-white/5 py-1"
+                      >
+                        <span className="truncate">{q.query}</span>
+                        <span className="flex items-center gap-2 whitespace-nowrap">
+                          <Badge variant="outline">{q.dominantSlot}</Badge>
+                          <span className="text-xs text-muted-foreground">
+                            M{q.mentioned}/O{q.open}/C{q.contested}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Growth Analysis</CardTitle>
