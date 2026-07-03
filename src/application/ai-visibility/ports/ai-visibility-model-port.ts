@@ -23,6 +23,27 @@ export interface VisibilityGapInput {
   competitors: string[];
 }
 
+// Input for drafting a citation-optimized page targeting a query the business
+// wants to win, guided by the diagnosis gaps.
+export interface CitationContentInput {
+  query: string;
+  brand: string;
+  domain: string;
+  gaps: string[];
+}
+
+export interface CitationDraftSection {
+  heading: string;
+  body: string;
+}
+
+export interface CitationDraft {
+  title: string;
+  metaDescription: string;
+  sections: CitationDraftSection[];
+  faqs: { question: string; answer: string }[];
+}
+
 // The AI answer engine as a queryable oracle. Implemented in infrastructure
 // by reusing the existing multi-provider LLM setup (see LlmSettings /
 // DynamicRecommendationProvider) — the probe just needs raw ask + a yes/no
@@ -42,4 +63,7 @@ export interface AiVisibilityModelPort {
   // concrete gaps it would need closed to start recommending it — the
   // "close the loop" diagnosis. Returns actionable gap statements.
   diagnoseVisibilityGap(input: VisibilityGapInput): Promise<string[]>;
+  // Draft a citation-optimized page for a target query, guided by the
+  // diagnosis gaps — the "act" step that turns a diagnosis into content.
+  generateCitationContent(input: CitationContentInput): Promise<CitationDraft>;
 }

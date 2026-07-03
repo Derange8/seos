@@ -31,6 +31,9 @@ class CapturingModel implements AiVisibilityModelPort {
     this.lastInput = input;
     return ["Add a comparison page"];
   }
+  async generateCitationContent() {
+    return { title: "", metaDescription: "", sections: [], faqs: [] };
+  }
 }
 
 function projectRepo(project: Project | null): ProjectRepositoryPort {

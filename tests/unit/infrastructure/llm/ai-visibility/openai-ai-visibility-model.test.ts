@@ -89,6 +89,31 @@ describe("OpenAiAiVisibilityModel", () => {
     expect(body.response_format).toEqual({ type: "json_object" });
   });
 
+  it("generateCitationContent parses the structured draft in JSON mode", async () => {
+    const draft = {
+      title: "Best Prediction Market",
+      metaDescription: "meta",
+      sections: [{ heading: "Why us", body: "..." }],
+      faqs: [{ question: "Is it safe?", answer: "Yes" }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(chatResponse(JSON.stringify(draft)));
+    vi.stubGlobal("fetch", fetchMock);
+    const model = new OpenAiAiVisibilityModel({ apiKey: "k" });
+
+    const result = await model.generateCitationContent({
+      query: "best prediction market",
+      brand: "Janus",
+      domain: "janus.vote",
+      gaps: ["Add a comparison page"],
+    });
+
+    expect(result.title).toBe("Best Prediction Market");
+    expect(result.sections).toEqual([{ heading: "Why us", body: "..." }]);
+    expect(result.faqs).toEqual([{ question: "Is it safe?", answer: "Yes" }]);
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.response_format).toEqual({ type: "json_object" });
+  });
+
   it("throws on a non-ok response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("bad", { status: 401 })));
     await expect(new OpenAiAiVisibilityModel({ apiKey: "k" }).ask("q")).rejects.toThrow(/401/);

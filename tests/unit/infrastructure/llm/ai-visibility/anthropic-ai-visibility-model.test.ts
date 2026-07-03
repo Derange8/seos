@@ -66,6 +66,17 @@ describe("AnthropicAiVisibilityModel", () => {
     expect(gaps).toEqual(["Publish pricing", "Add case studies"]);
   });
 
+  it("generateCitationContent parses the structured draft", async () => {
+    const draft = { title: "T", metaDescription: "m", sections: [{ heading: "h", body: "b" }], faqs: [] };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(messageResponse(JSON.stringify(draft))));
+    const model = new AnthropicAiVisibilityModel({ apiKey: "k" });
+
+    const result = await model.generateCitationContent({ query: "q", brand: "Janus", domain: "janus.vote", gaps: [] });
+
+    expect(result.title).toBe("T");
+    expect(result.sections).toEqual([{ heading: "h", body: "b" }]);
+  });
+
   it("throws on a non-ok response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("rate limited", { status: 429 })));
     await expect(new AnthropicAiVisibilityModel({ apiKey: "k" }).ask("q")).rejects.toThrow(/429/);

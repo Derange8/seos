@@ -23,6 +23,7 @@ import type { WordPressConnectionDto } from "@/application/wordpress/dto";
 import type { SearchPerformanceSnapshotDto, AnalyticsSnapshotDto, KeywordOpportunityDto, KeywordCannibalizationIssueDto, CtrUnderperformerDto } from "@/application/tracking/dto";
 import type { ContentIdeaDto, GrowthAnalysisDto, PageContentDraftDto } from "@/application/content-enrichment/dto";
 import type { AiVisibilityRunDto } from "@/application/ai-visibility/dto";
+import type { CitationDraft } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { formatAuditReport } from "@/lib/format-audit-report";
 
 type KeywordOpportunityRow = KeywordOpportunityDto & { suggestion: string | null };
@@ -253,6 +254,10 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [diagnosingQuery, setDiagnosingQuery] = useState<string | null>(null);
   const [diagnoses, setDiagnoses] = useState<Record<string, string[]>>({});
   const [diagnoseErrors, setDiagnoseErrors] = useState<Record<string, string>>({});
+  const [draftingQuery, setDraftingQuery] = useState<string | null>(null);
+  const [citationDrafts, setCitationDrafts] = useState<Record<string, CitationDraft>>({});
+  const [draftGapErrors, setDraftGapErrors] = useState<Record<string, string>>({});
+  const [copiedDraftQuery, setCopiedDraftQuery] = useState<string | null>(null);
 
   const [contentDrafts, setContentDrafts] = useState<PageContentDraftDto[]>([]);
   const [draftPageUrl, setDraftPageUrl] = useState("");
@@ -532,6 +537,50 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       return;
     }
     setDiagnoses((prev) => ({ ...prev, [query]: data.gaps ?? [] }));
+  }
+
+  function citationDraftToText(draft: CitationDraft): string {
+    const parts: string[] = [draft.title, "", draft.metaDescription, ""];
+    for (const s of draft.sections) parts.push(`## ${s.heading}`, s.body, "");
+    if (draft.faqs.length > 0) {
+      parts.push("## FAQ");
+      for (const f of draft.faqs) parts.push(`Q: ${f.question}`, `A: ${f.answer}`, "");
+    }
+    return parts.join("\n");
+  }
+
+  async function handleGenerateCitationDraft(query: string) {
+    setDraftingQuery(query);
+    setDraftGapErrors((prev) => ({ ...prev, [query]: "" }));
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${project.id}/ai-visibility/draft`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query, gaps: diagnoses[query] ?? [] }),
+      });
+    } catch {
+      setDraftingQuery(null);
+      setDraftGapErrors((prev) => ({ ...prev, [query]: "Network error — try again." }));
+      return;
+    }
+    const data = await response.json();
+
+    setDraftingQuery(null);
+    if (!response.ok) {
+      setDraftGapErrors((prev) => ({ ...prev, [query]: data.error ?? "Failed to draft content" }));
+      return;
+    }
+    setCitationDrafts((prev) => ({ ...prev, [query]: data }));
+  }
+
+  async function handleCopyCitationDraft(query: string) {
+    const draft = citationDrafts[query];
+    if (!draft) return;
+    await navigator.clipboard.writeText(citationDraftToText(draft));
+    setCopiedDraftQuery(query);
+    setTimeout(() => setCopiedDraftQuery(null), 2000);
   }
 
   async function handleRunAiVisibilityProbe() {
@@ -1698,6 +1747,51 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                               <li key={i}>{gap}</li>
                             ))}
                           </ul>
+                        )}
+                        {diagnoses[q.query] && diagnoses[q.query].length > 0 && (
+                          <div className="flex flex-col gap-2">
+                            <div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleGenerateCitationDraft(q.query)}
+                                disabled={draftingQuery === q.query}
+                              >
+                                {draftingQuery === q.query ? "Drafting…" : "Draft content"}
+                              </Button>
+                            </div>
+                            {draftGapErrors[q.query] && <p className="text-xs text-red-400">{draftGapErrors[q.query]}</p>}
+                            {citationDrafts[q.query] && (
+                              <div className="flex flex-col gap-2 rounded-md border border-white/10 bg-black/20 p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-medium">{citationDrafts[q.query].title}</span>
+                                  <Button variant="outline" size="sm" onClick={() => handleCopyCitationDraft(q.query)}>
+                                    {copiedDraftQuery === q.query ? "Copied" : "Copy"}
+                                  </Button>
+                                </div>
+                                <p className="text-xs italic text-muted-foreground">
+                                  {citationDrafts[q.query].metaDescription}
+                                </p>
+                                {citationDrafts[q.query].sections.map((s, i) => (
+                                  <div key={i}>
+                                    <p className="font-medium">{s.heading}</p>
+                                    <p className="whitespace-pre-wrap text-xs text-muted-foreground">{s.body}</p>
+                                  </div>
+                                ))}
+                                {citationDrafts[q.query].faqs.length > 0 && (
+                                  <div>
+                                    <p className="font-medium">FAQ</p>
+                                    {citationDrafts[q.query].faqs.map((f, i) => (
+                                      <div key={i} className="mt-1">
+                                        <p className="text-xs font-medium">{f.question}</p>
+                                        <p className="whitespace-pre-wrap text-xs text-muted-foreground">{f.answer}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     ))}

@@ -1,11 +1,14 @@
 import type {
   AiVisibilityModelPort,
+  CitationContentInput,
+  CitationDraft,
   ProbeTargetSuggestion,
   ProbeTargetSuggestionInput,
   VisibilityGapInput,
 } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { SUGGEST_SYSTEM, buildSuggestUserPrompt, parseSuggestion } from "@/infrastructure/llm/ai-visibility/probe-target-prompt";
 import { GAP_SYSTEM, buildGapUserPrompt, parseGaps } from "@/infrastructure/llm/ai-visibility/visibility-gap-prompt";
+import { CITATION_SYSTEM, buildCitationUserPrompt, parseCitationDraft } from "@/infrastructure/llm/ai-visibility/citation-content-prompt";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -81,6 +84,18 @@ export class OpenAiAiVisibilityModel implements AiVisibilityModelPort {
       true
     );
     return parseGaps(content);
+  }
+
+  async generateCitationContent(input: CitationContentInput): Promise<CitationDraft> {
+    const content = await this.chat(
+      [
+        { role: "system", content: CITATION_SYSTEM },
+        { role: "user", content: buildCitationUserPrompt(input) },
+      ],
+      0.5,
+      true
+    );
+    return parseCitationDraft(content);
   }
 
   private async chat(

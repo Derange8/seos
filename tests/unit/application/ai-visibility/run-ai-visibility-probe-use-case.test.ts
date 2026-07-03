@@ -37,6 +37,9 @@ class FakeModel implements AiVisibilityModelPort {
   async diagnoseVisibilityGap(): Promise<string[]> {
     return [];
   }
+  async generateCitationContent() {
+    return { title: "", metaDescription: "", sections: [], faqs: [] };
+  }
 }
 
 class FakeRunRepository implements AiVisibilityRunRepositoryPort {

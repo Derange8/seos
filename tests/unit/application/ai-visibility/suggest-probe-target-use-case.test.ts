@@ -42,6 +42,9 @@ class CapturingModel implements AiVisibilityModelPort {
   async diagnoseVisibilityGap(): Promise<string[]> {
     return [];
   }
+  async generateCitationContent() {
+    return { title: "", metaDescription: "", sections: [], faqs: [] };
+  }
 }
 
 function projectRepo(project: Project | null): ProjectRepositoryPort {

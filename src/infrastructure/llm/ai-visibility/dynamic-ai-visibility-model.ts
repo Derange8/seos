@@ -1,5 +1,7 @@
 import type {
   AiVisibilityModelPort,
+  CitationContentInput,
+  CitationDraft,
   ProbeTargetSuggestion,
   ProbeTargetSuggestionInput,
   VisibilityGapInput,
@@ -69,5 +71,9 @@ export class DynamicAiVisibilityModel implements AiVisibilityModelPort {
 
   async diagnoseVisibilityGap(input: VisibilityGapInput): Promise<string[]> {
     return (await this.resolve()).diagnoseVisibilityGap(input);
+  }
+
+  async generateCitationContent(input: CitationContentInput): Promise<CitationDraft> {
+    return (await this.resolve()).generateCitationContent(input);
   }
 }
