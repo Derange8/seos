@@ -3,6 +3,11 @@ import type { Slot } from "@/domain/ai-visibility/slot";
 import { dominantSlot } from "@/domain/ai-visibility/slot";
 import { buildScorecard, type AiVisibilityScorecard } from "@/domain/ai-visibility/services/scorecard";
 import { computeAiVisibilityDelta, type AiVisibilityDelta } from "@/domain/ai-visibility/services/delta";
+import type {
+  ExperimentOutcome,
+  ExperimentStatus,
+  VisibilityExperiment,
+} from "@/domain/ai-visibility/entities/visibility-experiment";
 
 export interface AiVisibilityQueryDto {
   query: string;
@@ -20,6 +25,28 @@ export interface AiVisibilityRunDto {
   queries: AiVisibilityQueryDto[];
   // Movement vs the previous run, when one exists — the re-measure payoff.
   delta: AiVisibilityDelta | null;
+}
+
+export interface VisibilityExperimentDto {
+  id: string;
+  query: string;
+  baselineSlot: Slot;
+  actionAt: string;
+  status: ExperimentStatus;
+  outcomeSlot: Slot | null;
+  outcome: ExperimentOutcome | null;
+}
+
+export function toVisibilityExperimentDto(experiment: VisibilityExperiment): VisibilityExperimentDto {
+  return {
+    id: experiment.id,
+    query: experiment.query,
+    baselineSlot: experiment.baselineSlot,
+    actionAt: experiment.actionAt.toISOString(),
+    status: experiment.status,
+    outcomeSlot: experiment.outcomeSlot,
+    outcome: experiment.outcome,
+  };
 }
 
 export function toAiVisibilityRunDto(

@@ -22,7 +22,7 @@ import type { AuditDeltaDto } from "@/application/delta-audit/dto";
 import type { WordPressConnectionDto } from "@/application/wordpress/dto";
 import type { SearchPerformanceSnapshotDto, AnalyticsSnapshotDto, KeywordOpportunityDto, KeywordCannibalizationIssueDto, CtrUnderperformerDto } from "@/application/tracking/dto";
 import type { ContentIdeaDto, GrowthAnalysisDto, PageContentDraftDto } from "@/application/content-enrichment/dto";
-import type { AiVisibilityRunDto } from "@/application/ai-visibility/dto";
+import type { AiVisibilityRunDto, VisibilityExperimentDto } from "@/application/ai-visibility/dto";
 import type { CitationDraft } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { formatAuditReport } from "@/lib/format-audit-report";
 
@@ -258,6 +258,7 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [citationDrafts, setCitationDrafts] = useState<Record<string, CitationDraft>>({});
   const [draftGapErrors, setDraftGapErrors] = useState<Record<string, string>>({});
   const [copiedDraftQuery, setCopiedDraftQuery] = useState<string | null>(null);
+  const [experiments, setExperiments] = useState<VisibilityExperimentDto[]>([]);
 
   const [contentDrafts, setContentDrafts] = useState<PageContentDraftDto[]>([]);
   const [draftPageUrl, setDraftPageUrl] = useState("");
@@ -320,6 +321,10 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       .then((response) => (response.ok ? response.json() : null))
       .then((data: AiVisibilityRunDto | null) => setAiVisibility(data))
       .catch((error: unknown) => console.error("Failed to fetch AI visibility run", error));
+    fetch(`/api/v1/projects/${project.id}/ai-visibility/experiments`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data: VisibilityExperimentDto[]) => setExperiments(data))
+      .catch((error: unknown) => console.error("Failed to fetch visibility experiments", error));
   }, [project.id]);
 
   useEffect(() => {
@@ -557,6 +562,21 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     return n > 0 ? "text-green-400" : n < 0 ? "text-red-400" : "text-muted-foreground";
   }
 
+  function refreshAiVisibilityExperiments() {
+    fetch(`/api/v1/projects/${project.id}/ai-visibility/experiments`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data: VisibilityExperimentDto[]) => setExperiments(data))
+      .catch((error: unknown) => console.error("Failed to fetch visibility experiments", error));
+  }
+
+  function experimentOutcomeClass(outcome: string | null): string {
+    return outcome === "IMPROVED"
+      ? "text-green-400"
+      : outcome === "REGRESSED"
+        ? "text-red-400"
+        : "text-muted-foreground";
+  }
+
   async function handleGenerateCitationDraft(query: string) {
     setDraftingQuery(query);
     setDraftGapErrors((prev) => ({ ...prev, [query]: "" }));
@@ -581,6 +601,8 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       return;
     }
     setCitationDrafts((prev) => ({ ...prev, [query]: data }));
+    // Drafting opened a tracking experiment server-side — reflect it.
+    refreshAiVisibilityExperiments();
   }
 
   async function handleCopyCitationDraft(query: string) {
@@ -628,6 +650,8 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       return;
     }
     setAiVisibility(data);
+    // A fresh probe may have resolved open experiments — reflect outcomes.
+    refreshAiVisibilityExperiments();
   }
 
   async function handleGenerateGrowthAnalysis() {
@@ -1831,6 +1855,35 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+              {experiments.length > 0 && (
+                <div className="flex flex-col gap-1 rounded-md border border-white/10 bg-black/20 p-3">
+                  <span className="font-medium">Experiments</span>
+                  <span className="text-xs text-muted-foreground">
+                    What moved after you drafted content — observed over time, not proven causation.
+                  </span>
+                  {experiments.map((e) => (
+                    <div
+                      key={e.id}
+                      className="flex items-center justify-between gap-2 border-b border-white/5 py-1"
+                    >
+                      <span className="truncate">{e.query}</span>
+                      <span className="flex items-center gap-2 whitespace-nowrap text-xs">
+                        <span className="text-muted-foreground">
+                          {e.baselineSlot}
+                          {e.outcomeSlot ? ` → ${e.outcomeSlot}` : ""}
+                        </span>
+                        {e.status === "OPEN" ? (
+                          <Badge variant="outline">tracking…</Badge>
+                        ) : (
+                          <Badge variant="outline" className={experimentOutcomeClass(e.outcome)}>
+                            {e.outcome}
+                          </Badge>
+                        )}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>

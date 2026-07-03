@@ -4,7 +4,9 @@ import { PrismaProjectRepository } from "@/infrastructure/persistence/prisma/pri
 import { PrismaAiVisibilityRunRepository } from "@/infrastructure/persistence/prisma/prisma-ai-visibility-run-repository";
 import { PrismaLlmSettingsRepository } from "@/infrastructure/persistence/prisma/prisma-llm-settings-repository";
 import { DynamicAiVisibilityModel } from "@/infrastructure/llm/ai-visibility/dynamic-ai-visibility-model";
+import { PrismaVisibilityExperimentRepository } from "@/infrastructure/persistence/prisma/prisma-visibility-experiment-repository";
 import { RunAiVisibilityProbeUseCase } from "@/application/ai-visibility/use-cases/run-ai-visibility-probe-use-case";
+import { ResolveVisibilityExperimentsUseCase } from "@/application/ai-visibility/use-cases/resolve-visibility-experiments-use-case";
 import { AiVisibilityProviderNotConfiguredError } from "@/application/ai-visibility/errors";
 import { toAiVisibilityRunDto } from "@/application/ai-visibility/dto";
 import type { ProbeTarget } from "@/domain/ai-visibility/entities/probe-target";
@@ -83,6 +85,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     const run = await useCase.execute(projectId, target);
+    // A fresh probe is the re-measure that resolves any open experiments for
+    // the queries it covered. Never let ledger bookkeeping fail the probe.
+    try {
+      await new ResolveVisibilityExperimentsUseCase({
+        experimentRepository: new PrismaVisibilityExperimentRepository(prisma),
+      }).execute(projectId, run);
+    } catch (ledgerError) {
+      console.error("Failed to resolve visibility experiments", ledgerError);
+    }
     // The run just saved is the newest; the one before it is the baseline to
     // show movement against.
     const recent = await runRepository.findRecentByProjectId(projectId, 2);
