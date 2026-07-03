@@ -55,6 +55,21 @@ describe("OpenAiAiVisibilityModel", () => {
     expect(JSON.parse(init.body as string).model).toBe("deepseek-chat");
   });
 
+  it("suggestProbeTarget requests JSON mode and parses queries + competitors", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(chatResponse(JSON.stringify({ queries: ["q1", "q2"], competitors: ["Polymarket"] })));
+    vi.stubGlobal("fetch", fetchMock);
+    const model = new OpenAiAiVisibilityModel({ apiKey: "k" });
+
+    const suggestion = await model.suggestProbeTarget({ brand: "Janus", domain: "janus.vote", pageHints: ["Home"] });
+
+    expect(suggestion.queries).toEqual(["q1", "q2"]);
+    expect(suggestion.competitors).toEqual(["Polymarket"]);
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.response_format).toEqual({ type: "json_object" });
+  });
+
   it("throws on a non-ok response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("bad", { status: 401 })));
     await expect(new OpenAiAiVisibilityModel({ apiKey: "k" }).ask("q")).rejects.toThrow(/401/);

@@ -38,6 +38,17 @@ describe("AnthropicAiVisibilityModel", () => {
     expect(body.temperature).toBe(0);
   });
 
+  it("suggestProbeTarget parses queries + competitors, tolerating a markdown code fence", async () => {
+    const fenced = "```json\n" + JSON.stringify({ queries: ["q1"], competitors: ["Kalshi"] }) + "\n```";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(messageResponse(fenced)));
+    const model = new AnthropicAiVisibilityModel({ apiKey: "k" });
+
+    const suggestion = await model.suggestProbeTarget({ brand: "Janus", domain: "janus.vote", pageHints: [] });
+
+    expect(suggestion.queries).toEqual(["q1"]);
+    expect(suggestion.competitors).toEqual(["Kalshi"]);
+  });
+
   it("throws on a non-ok response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("rate limited", { status: 429 })));
     await expect(new AnthropicAiVisibilityModel({ apiKey: "k" }).ask("q")).rejects.toThrow(/429/);

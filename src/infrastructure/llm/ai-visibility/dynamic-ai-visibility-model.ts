@@ -1,4 +1,8 @@
-import type { AiVisibilityModelPort } from "@/application/ai-visibility/ports/ai-visibility-model-port";
+import type {
+  AiVisibilityModelPort,
+  ProbeTargetSuggestion,
+  ProbeTargetSuggestionInput,
+} from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { AiVisibilityProviderNotConfiguredError } from "@/application/ai-visibility/errors";
 import type { LlmSettingsRepositoryPort } from "@/application/settings/ports/llm-settings-repository-port";
 import type { LlmProvider } from "@/domain/settings/entities/llm-settings";
@@ -56,5 +60,9 @@ export class DynamicAiVisibilityModel implements AiVisibilityModelPort {
 
   async namesSpecificOption(answer: string): Promise<boolean> {
     return (await this.resolve()).namesSpecificOption(answer);
+  }
+
+  async suggestProbeTarget(input: ProbeTargetSuggestionInput): Promise<ProbeTargetSuggestion> {
+    return (await this.resolve()).suggestProbeTarget(input);
   }
 }

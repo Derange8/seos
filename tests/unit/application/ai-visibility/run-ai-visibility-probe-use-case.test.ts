@@ -31,6 +31,9 @@ class FakeModel implements AiVisibilityModelPort {
     // Only the unknown-brand answer names a specific option.
     return answer.includes("SomeUnknownBrand");
   }
+  async suggestProbeTarget(): Promise<{ queries: string[]; competitors: string[] }> {
+    return { queries: [], competitors: [] };
+  }
 }
 
 class FakeRunRepository implements AiVisibilityRunRepositoryPort {

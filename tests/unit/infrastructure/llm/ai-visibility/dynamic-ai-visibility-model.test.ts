@@ -69,6 +69,24 @@ describe("DynamicAiVisibilityModel", () => {
     expect(init.headers).toMatchObject({ "x-api-key": "claude-key" });
   });
 
+  it("suggestProbeTarget dispatches to the configured provider", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ queries: ["q"], competitors: [] }) } }] }), {
+          status: 200,
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const model = new DynamicAiVisibilityModel(repositoryReturning(LlmSettings.create("openai", "sk-key", null)), noopLogger);
+
+    const suggestion = await model.suggestProbeTarget({ brand: "Janus", domain: "janus.vote", pageHints: [] });
+
+    expect(suggestion.queries).toEqual(["q"]);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe("https://api.openai.com/v1/chat/completions");
+  });
+
   it("resolves settings once and caches the model for the run's lifetime", async () => {
     // Fresh Response per call — a Response body can only be read once.
     const fetchMock = vi.fn().mockImplementation(async () => openAiResponse());

@@ -1,4 +1,9 @@
-import type { AiVisibilityModelPort } from "@/application/ai-visibility/ports/ai-visibility-model-port";
+import type {
+  AiVisibilityModelPort,
+  ProbeTargetSuggestion,
+  ProbeTargetSuggestionInput,
+} from "@/application/ai-visibility/ports/ai-visibility-model-port";
+import { SUGGEST_SYSTEM, buildSuggestUserPrompt, parseSuggestion } from "@/infrastructure/llm/ai-visibility/probe-target-prompt";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -52,11 +57,32 @@ export class OpenAiAiVisibilityModel implements AiVisibilityModelPort {
     return verdict.trim().toLowerCase().startsWith("y");
   }
 
-  private async chat(messages: { role: string; content: string }[], temperature: number): Promise<string> {
+  async suggestProbeTarget(input: ProbeTargetSuggestionInput): Promise<ProbeTargetSuggestion> {
+    const content = await this.chat(
+      [
+        { role: "system", content: SUGGEST_SYSTEM },
+        { role: "user", content: buildSuggestUserPrompt(input) },
+      ],
+      0.4,
+      true
+    );
+    return parseSuggestion(content);
+  }
+
+  private async chat(
+    messages: { role: string; content: string }[],
+    temperature: number,
+    jsonMode = false
+  ): Promise<string> {
     const response = await fetch(this.apiUrl, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${this.apiKey}` },
-      body: JSON.stringify({ model: this.model, messages, temperature }),
+      body: JSON.stringify({
+        model: this.model,
+        messages,
+        temperature,
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+      }),
     });
 
     if (!response.ok) {

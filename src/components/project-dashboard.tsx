@@ -246,6 +246,7 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
 
   const [aiVisibility, setAiVisibility] = useState<AiVisibilityRunDto | null>(null);
   const [isProbingAiVisibility, setIsProbingAiVisibility] = useState(false);
+  const [isSuggestingQueries, setIsSuggestingQueries] = useState(false);
   const [aiVisibilityError, setAiVisibilityError] = useState<string | null>(null);
   const [aiVisibilityQueries, setAiVisibilityQueries] = useState("");
   const [aiVisibilityCompetitors, setAiVisibilityCompetitors] = useState("");
@@ -479,6 +480,29 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     }
 
     setContentIdeas(data);
+  }
+
+  async function handleSuggestAiVisibilityQueries() {
+    setIsSuggestingQueries(true);
+    setAiVisibilityError(null);
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${project.id}/ai-visibility/suggest`, { method: "POST" });
+    } catch {
+      setIsSuggestingQueries(false);
+      setAiVisibilityError("Network error — check your connection and try again.");
+      return;
+    }
+    const data = await response.json();
+
+    setIsSuggestingQueries(false);
+    if (!response.ok) {
+      setAiVisibilityError(data.error ?? "Failed to suggest queries");
+      return;
+    }
+    setAiVisibilityQueries((data.queries ?? []).join("\n"));
+    setAiVisibilityCompetitors((data.competitors ?? []).join(", "));
   }
 
   async function handleRunAiVisibilityProbe() {
@@ -1545,8 +1569,16 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
           <Card>
             <CardHeader>
               <CardTitle>{t("cardAiVisibility")}</CardTitle>
-              <CardAction>
-                <Button onClick={handleRunAiVisibilityProbe} disabled={isProbingAiVisibility} size="sm">
+              <CardAction className="flex gap-2">
+                <Button
+                  onClick={handleSuggestAiVisibilityQueries}
+                  disabled={isSuggestingQueries || isProbingAiVisibility}
+                  variant="outline"
+                  size="sm"
+                >
+                  {isSuggestingQueries ? "Suggesting…" : "Suggest queries"}
+                </Button>
+                <Button onClick={handleRunAiVisibilityProbe} disabled={isProbingAiVisibility || isSuggestingQueries} size="sm">
                   {isProbingAiVisibility ? "Measuring…" : aiVisibility ? "Re-measure" : "Measure"}
                 </Button>
               </CardAction>
@@ -1554,8 +1586,9 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
             <CardContent className="flex flex-col gap-3 text-sm">
               <p className="text-muted-foreground">
                 Measures whether AI answer engines (e.g. ChatGPT) recommend your site for buyer-intent
-                queries — the discovery layer no classic SEO tool sees. Enter the queries a customer might ask
-                an assistant, one per line. Each is sampled several times, so this can take a minute.
+                queries — the discovery layer no classic SEO tool sees. Click Suggest queries to have the tool
+                propose them from your site, or type your own (one per line). Each is sampled several times, so
+                this can take a minute.
               </p>
               <div className="flex flex-col gap-1">
                 <Label htmlFor="ai-visibility-queries">Target queries (one per line)</Label>

@@ -1,4 +1,9 @@
-import type { AiVisibilityModelPort } from "@/application/ai-visibility/ports/ai-visibility-model-port";
+import type {
+  AiVisibilityModelPort,
+  ProbeTargetSuggestion,
+  ProbeTargetSuggestionInput,
+} from "@/application/ai-visibility/ports/ai-visibility-model-port";
+import { SUGGEST_SYSTEM, buildSuggestUserPrompt, parseSuggestion } from "@/infrastructure/llm/ai-visibility/probe-target-prompt";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -41,6 +46,11 @@ export class AnthropicAiVisibilityModel implements AiVisibilityModelPort {
   async namesSpecificOption(answer: string): Promise<boolean> {
     const verdict = await this.message(JUDGE_SYSTEM, judgePrompt(answer), 5, 0);
     return verdict.trim().toLowerCase().startsWith("y");
+  }
+
+  async suggestProbeTarget(input: ProbeTargetSuggestionInput): Promise<ProbeTargetSuggestion> {
+    const content = await this.message(SUGGEST_SYSTEM, buildSuggestUserPrompt(input), 1024, 0.4);
+    return parseSuggestion(content);
   }
 
   private async message(
