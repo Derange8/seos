@@ -43,6 +43,7 @@ model Project {
   growthAnalysis          GrowthAnalysis?
   pageContentDrafts       PageContentDraft[]
   aiVisibilityProbeRuns   AiVisibilityProbeRun[]
+  visibilityExperiments   VisibilityExperiment[]
   createdAt               DateTime                    @default(now())
 
   @@map("projects")
@@ -543,6 +544,26 @@ model AiVisibilityProbeRun {
 
   @@index([projectId])
   @@map("ai_visibility_probe_runs")
+}
+
+// One "did acting on this query move its AI visibility?" record — opened when
+// citation content is drafted for a query, resolved by a later probe run.
+// The local learning substrate a future collective model would aggregate.
+// Slot/status stored as TEXT (SQLite). See VisibilityExperiment entity.
+model VisibilityExperiment {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  query         String
+  baselineSlot  String
+  baselineRunAt DateTime
+  actionAt      DateTime  @default(now())
+  status        String    @default("OPEN")
+  outcomeSlot   String?
+  outcomeRunAt  DateTime?
+
+  @@index([projectId])
+  @@map("visibility_experiments")
 }
 
 // Real per-page GSC totals (unfiltered) — a byproduct of the same

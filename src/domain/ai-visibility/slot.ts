@@ -4,6 +4,12 @@
 //  - OPEN:      no specific platform is named at all — a winnable slot
 export type Slot = "MENTIONED" | "CONTESTED" | "OPEN";
 
+// Ordered by how good the position is for the target's own visibility:
+// MENTIONED (recommended) > OPEN (winnable gap, no incumbent) > CONTESTED
+// (a competitor is recommended, you aren't). Used to classify whether an
+// experiment moved a query forward or back.
+export const SLOT_RANK: Record<Slot, number> = { CONTESTED: 0, OPEN: 1, MENTIONED: 2 };
+
 // Pure detection — case-insensitive substring match. Deliberately dumb and
 // deterministic; the fuzzier "does this answer name ANY specific platform,
 // even one we don't track" question is answered by the model itself (see
