@@ -70,6 +70,25 @@ describe("OpenAiAiVisibilityModel", () => {
     expect(body.response_format).toEqual({ type: "json_object" });
   });
 
+  it("diagnoseVisibilityGap parses the gaps array in JSON mode", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(chatResponse(JSON.stringify({ gaps: ["Add a comparison page", "Get third-party reviews"] })));
+    vi.stubGlobal("fetch", fetchMock);
+    const model = new OpenAiAiVisibilityModel({ apiKey: "k" });
+
+    const gaps = await model.diagnoseVisibilityGap({
+      query: "best prediction market",
+      brand: "Janus",
+      domain: "janus.vote",
+      competitors: ["Polymarket"],
+    });
+
+    expect(gaps).toEqual(["Add a comparison page", "Get third-party reviews"]);
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.response_format).toEqual({ type: "json_object" });
+  });
+
   it("throws on a non-ok response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("bad", { status: 401 })));
     await expect(new OpenAiAiVisibilityModel({ apiKey: "k" }).ask("q")).rejects.toThrow(/401/);

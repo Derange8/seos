@@ -49,6 +49,23 @@ describe("AnthropicAiVisibilityModel", () => {
     expect(suggestion.competitors).toEqual(["Kalshi"]);
   });
 
+  it("diagnoseVisibilityGap parses the gaps array", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(messageResponse(JSON.stringify({ gaps: ["Publish pricing", "Add case studies"] })))
+    );
+    const model = new AnthropicAiVisibilityModel({ apiKey: "k" });
+
+    const gaps = await model.diagnoseVisibilityGap({
+      query: "q",
+      brand: "Janus",
+      domain: "janus.vote",
+      competitors: [],
+    });
+
+    expect(gaps).toEqual(["Publish pricing", "Add case studies"]);
+  });
+
   it("throws on a non-ok response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("rate limited", { status: 429 })));
     await expect(new AnthropicAiVisibilityModel({ apiKey: "k" }).ask("q")).rejects.toThrow(/429/);

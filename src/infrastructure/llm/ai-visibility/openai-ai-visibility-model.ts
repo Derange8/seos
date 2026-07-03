@@ -2,8 +2,10 @@ import type {
   AiVisibilityModelPort,
   ProbeTargetSuggestion,
   ProbeTargetSuggestionInput,
+  VisibilityGapInput,
 } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { SUGGEST_SYSTEM, buildSuggestUserPrompt, parseSuggestion } from "@/infrastructure/llm/ai-visibility/probe-target-prompt";
+import { GAP_SYSTEM, buildGapUserPrompt, parseGaps } from "@/infrastructure/llm/ai-visibility/visibility-gap-prompt";
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -67,6 +69,18 @@ export class OpenAiAiVisibilityModel implements AiVisibilityModelPort {
       true
     );
     return parseSuggestion(content);
+  }
+
+  async diagnoseVisibilityGap(input: VisibilityGapInput): Promise<string[]> {
+    const content = await this.chat(
+      [
+        { role: "system", content: GAP_SYSTEM },
+        { role: "user", content: buildGapUserPrompt(input) },
+      ],
+      0.4,
+      true
+    );
+    return parseGaps(content);
   }
 
   private async chat(

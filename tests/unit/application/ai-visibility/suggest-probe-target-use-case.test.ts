@@ -39,6 +39,9 @@ class CapturingModel implements AiVisibilityModelPort {
     this.lastInput = input;
     return { queries: ["suggested q"], competitors: ["Polymarket"] };
   }
+  async diagnoseVisibilityGap(): Promise<string[]> {
+    return [];
+  }
 }
 
 function projectRepo(project: Project | null): ProjectRepositoryPort {

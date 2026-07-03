@@ -2,6 +2,7 @@ import type {
   AiVisibilityModelPort,
   ProbeTargetSuggestion,
   ProbeTargetSuggestionInput,
+  VisibilityGapInput,
 } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { AiVisibilityProviderNotConfiguredError } from "@/application/ai-visibility/errors";
 import type { LlmSettingsRepositoryPort } from "@/application/settings/ports/llm-settings-repository-port";
@@ -64,5 +65,9 @@ export class DynamicAiVisibilityModel implements AiVisibilityModelPort {
 
   async suggestProbeTarget(input: ProbeTargetSuggestionInput): Promise<ProbeTargetSuggestion> {
     return (await this.resolve()).suggestProbeTarget(input);
+  }
+
+  async diagnoseVisibilityGap(input: VisibilityGapInput): Promise<string[]> {
+    return (await this.resolve()).diagnoseVisibilityGap(input);
   }
 }

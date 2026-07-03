@@ -34,6 +34,9 @@ class FakeModel implements AiVisibilityModelPort {
   async suggestProbeTarget(): Promise<{ queries: string[]; competitors: string[] }> {
     return { queries: [], competitors: [] };
   }
+  async diagnoseVisibilityGap(): Promise<string[]> {
+    return [];
+  }
 }
 
 class FakeRunRepository implements AiVisibilityRunRepositoryPort {

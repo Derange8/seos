@@ -2,8 +2,10 @@ import type {
   AiVisibilityModelPort,
   ProbeTargetSuggestion,
   ProbeTargetSuggestionInput,
+  VisibilityGapInput,
 } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { SUGGEST_SYSTEM, buildSuggestUserPrompt, parseSuggestion } from "@/infrastructure/llm/ai-visibility/probe-target-prompt";
+import { GAP_SYSTEM, buildGapUserPrompt, parseGaps } from "@/infrastructure/llm/ai-visibility/visibility-gap-prompt";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -51,6 +53,11 @@ export class AnthropicAiVisibilityModel implements AiVisibilityModelPort {
   async suggestProbeTarget(input: ProbeTargetSuggestionInput): Promise<ProbeTargetSuggestion> {
     const content = await this.message(SUGGEST_SYSTEM, buildSuggestUserPrompt(input), 1024, 0.4);
     return parseSuggestion(content);
+  }
+
+  async diagnoseVisibilityGap(input: VisibilityGapInput): Promise<string[]> {
+    const content = await this.message(GAP_SYSTEM, buildGapUserPrompt(input), 1024, 0.4);
+    return parseGaps(content);
   }
 
   private async message(
