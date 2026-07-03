@@ -41,6 +41,12 @@ const WHY_EN: Section[] = [
           That gap between <strong>diagnosis</strong> and <strong>action</strong> is where most SEO effort quietly
           dies. A 40-page audit report is a to-do list nobody finishes.
         </p>
+        <p>
+          And there&apos;s a deeper shift underway. People increasingly get answers straight from AI assistants —
+          ChatGPT, Perplexity, Google&apos;s AI Overviews — not a page of ten blue links. A perfect technical SEO
+          score has never been further from the thing you actually want, which is to be the business the AI
+          recommends when your customer asks. That is a layer no classic SEO tool even looks at.
+        </p>
       </>
     ),
   },
@@ -49,12 +55,21 @@ const WHY_EN: Section[] = [
     body: (
       <>
         <p>
-          Seos doesn&apos;t stop at the report. For every issue it can fix safely, it generates the actual
-          replacement content — a better title, a real meta description, a full page draft — and, where you&apos;ve
-          connected WordPress, can push that change to the live page with one click. Every applied change can be
-          undone with one more click. The agent doesn&apos;t just tell you the score is 62; it tries to move it
-          toward 100, with you approving every step it takes (or, for the narrowest and safest changes, with your
-          standing permission via Otomatik Pilot — see below).
+          Seos leads with the question that now matters most: <strong>do AI answer engines actually recommend your
+          site</strong> for what your customers ask? It measures exactly that — sampling each buyer-intent question
+          several times (AI answers vary run to run) and reporting whether you&apos;re recommended, beaten by a named
+          competitor, or absent from an open slot no one owns yet.
+        </p>
+        <p>
+          Then it closes the loop. For any question you aren&apos;t winning, Seos asks the model precisely what your
+          site would need to be recommended, drafts the citation-optimized content that would close that gap, and
+          lets you re-measure to see whether it moved. That is the difference between a tool that reports and an
+          agent that drives a result.
+        </p>
+        <p>
+          It still does the classic work too — the 21-rule audit, ready-to-apply Title/Meta fixes, one-click
+          WordPress publishing with rollback, all with you approving every step. But the headline question is no
+          longer &quot;is your score 100&quot;; it&apos;s &quot;does AI recommend you.&quot;
         </p>
       </>
     ),
@@ -158,6 +173,12 @@ const WHY_TR: Section[] = [
           <strong>Teşhis</strong> ile <strong>aksiyon</strong> arasındaki bu boşluk, çoğu SEO çalışmasının sessizce
           öldüğü yerdir. 40 sayfalık bir denetim raporu, kimsenin bitirmediği bir yapılacaklar listesidir.
         </p>
+        <p>
+          Ve daha derin bir kayma yaşanıyor. İnsanlar giderek cevabı doğrudan AI asistanlarından alıyor — ChatGPT,
+          Perplexity, Google&apos;ın AI Overviews&apos;ı — on mavi linklik bir sayfadan değil. Mükemmel bir teknik SEO
+          skoru, aslında istediğin şeyden hiç bu kadar uzak olmamıştı: müşterin sorduğunda AI&apos;ın önerdiği işletme
+          olmak. Bu, hiçbir klasik SEO aracının bakmadığı bir katman.
+        </p>
       </>
     ),
   },
@@ -166,11 +187,21 @@ const WHY_TR: Section[] = [
     body: (
       <>
         <p>
-          Seos raporda durmuyor. Güvenle düzeltebileceği her sorun için gerçek yedek içeriği üretiyor — daha iyi
-          bir başlık, gerçek bir meta açıklama, tam bir sayfa taslağı — ve WordPress bağlıysan, bu değişikliği tek
-          tıkla canlı sayfaya gönderebiliyor. Uygulanan her değişiklik tek tıkla geri alınabiliyor. Ajan sana sadece
-          &quot;skorun 62&quot; demiyor; senin onayınla (veya en güvenli, en dar değişiklikler için Otomatik Pilot&apos;taki kalıcı
-          iznin ile — aşağıda) onu 100&apos;e doğru taşımaya çalışıyor.
+          Seos artık en çok önem taşıyan soruyla başlıyor: <strong>AI cevap motorları siteni gerçekten öneriyor
+          mu</strong> — müşterinin sorduğu şey için? Tam da bunu ölçüyor: her alıcı-niyetli soruyu birkaç kez
+          örnekleyerek (AI cevapları çalıştıkça değişir) ve seni önerilmiş mi, adı geçen bir rakibe mi yenik, yoksa
+          henüz kimsenin sahip olmadığı boş bir slotta mı yok — bunu raporlayarak.
+        </p>
+        <p>
+          Sonra döngüyü kapatıyor. Kazanamadığın her soru için, siteninin önerilmesi için tam olarak neyin gerektiğini
+          modele soruyor, o boşluğu kapatacak citation-optimize içeriği taslak olarak üretiyor ve hareket edip
+          etmediğini görmek için tekrar ölçmene izin veriyor. Rapor veren bir araç ile sonuç üreten bir ajan
+          arasındaki fark budur.
+        </p>
+        <p>
+          Klasik işi de hâlâ yapıyor — 21 kurallı denetim, uygulamaya hazır Title/Meta düzeltmeleri, geri alma dahil
+          tek tıkla WordPress yayınlama, hepsi senin her adımı onaylamanla. Ama asıl soru artık &quot;skorun 100 mü&quot;
+          değil; &quot;AI seni öneriyor mu.&quot;
         </p>
       </>
     ),
@@ -264,6 +295,26 @@ const WHY_TR: Section[] = [
 // ---------------------------------------------------------------------------
 
 const FEATURES_EN: Section[] = [
+  {
+    title: "★ AI Visibility — become the answer AI recommends",
+    body: (
+      <>
+        <p>
+          The headline capability. For the buyer-intent questions your customers ask an AI assistant, Seos measures
+          whether your site is recommended, beaten by a named competitor, or absent from an open slot — sampling each
+          question several times, because AI answers vary run to run, and reading the distribution rather than a
+          single lucky shot.
+        </p>
+        <p>
+          It closes the loop end to end: <strong>Suggest queries</strong> proposes the questions worth measuring
+          from your own site; <strong>Measure</strong> runs the probe and scores your visibility; <strong>Why
+          not?</strong> asks the model exactly what your site would need to be recommended for a question you&apos;re
+          losing; <strong>Draft content</strong> turns that diagnosis into a ready citation-optimized page; and a
+          re-measure shows the movement versus your last run. No classic SEO tool sees this layer.
+        </p>
+      </>
+    ),
+  },
   {
     title: "1. The crawler",
     body: (
@@ -439,6 +490,25 @@ const FEATURES_EN: Section[] = [
 ];
 
 const FEATURES_TR: Section[] = [
+  {
+    title: "★ AI Görünürlük — AI'ın önerdiği cevap ol",
+    body: (
+      <>
+        <p>
+          Amiral özellik. Müşterilerinin bir AI asistanına sorduğu alıcı-niyetli sorular için Seos, sitenin önerilmiş
+          mi, adı geçen bir rakibe mi yenik, yoksa boş bir slotta mı yok olduğunu ölçer — her soruyu birkaç kez
+          örnekleyerek (AI cevapları çalıştıkça değişir) ve tek şanslı bir atış yerine dağılımı okuyarak.
+        </p>
+        <p>
+          Döngüyü uçtan uca kapatır: <strong>Suggest queries</strong> ölçülmeye değer soruları kendi sitenden önerir;
+          <strong>Measure</strong> probe&apos;u çalıştırıp görünürlüğünü skorlar; <strong>Why not?</strong> kaybettiğin
+          bir soru için siteninin önerilmesi için tam olarak neyin gerektiğini modele sorar; <strong>Draft
+          content</strong> o teşhisi hazır bir citation-optimize sayfaya çevirir; ve tekrar ölçüm, son çalıştırmana
+          göre hareketi gösterir. Hiçbir klasik SEO aracı bu katmanı görmez.
+        </p>
+      </>
+    ),
+  },
   {
     title: "1. Crawler (Tarayıcı)",
     body: (
@@ -655,6 +725,18 @@ const STEPS_EN: Section[] = [
     ),
   },
   {
+    title: "★ Measure your AI Visibility (the new core)",
+    body: (
+      <p>
+        In the Growth tab, open the <strong>AI Visibility</strong> card (needs an AI provider set). Click{" "}
+        <strong>Suggest queries</strong> to let Seos propose the buyer-intent questions worth measuring from your own
+        site — or type your own, one per line — then <strong>Measure</strong>. For any question you aren&apos;t
+        winning, <strong>Why not?</strong> gives a concrete diagnosis and <strong>Draft content</strong> generates a
+        ready citation page. Come back and Measure again any time to see the delta versus your last run.
+      </p>
+    ),
+  },
+  {
     title: "5. (Optional) Verify domain ownership",
     body: (
       <>
@@ -765,6 +847,19 @@ const STEPS_TR: Section[] = [
       <p>
         Audit kartı genel skoru, kategori bazlı skorları ve bulunan her sorunu gösterir — her biri önem derecesi,
         öncelik katmanı, (Google bağlıysa) trafik-etki katmanı ve altında bir AI açıklamasıyla birlikte.
+      </p>
+    ),
+  },
+  {
+    title: "★ AI Görünürlüğünü ölç (yeni çekirdek)",
+    body: (
+      <p>
+        Growth sekmesinde <strong>AI Görünürlük</strong> kartını aç (bir AI sağlayıcı ayarlı olmalı).{" "}
+        <strong>Suggest queries</strong>&apos;e tıklayarak Seos&apos;un ölçülmeye değer alıcı-niyetli soruları kendi
+        sitenden önermesini sağla — veya kendi sorularını satır satır yaz — sonra <strong>Measure</strong>.
+        Kazanamadığın her soru için <strong>Why not?</strong> somut bir teşhis, <strong>Draft content</strong> ise
+        hazır bir citation sayfası üretir. İstediğin zaman tekrar Measure&apos;a basıp son çalıştırmana göre delta&apos;yı
+        gör.
       </p>
     ),
   },
