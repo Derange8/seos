@@ -31,7 +31,10 @@ export default async function Home() {
         <h1 className="bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-4xl font-semibold tracking-tight text-transparent">
           Seos
         </h1>
-        <p className="text-sm text-muted-foreground">AI SEO program — fix your site&apos;s score from the inside</p>
+        <p className="text-sm text-muted-foreground">
+          The AI Growth Engineer for your website — become the answer AI assistants recommend, not just another SEO
+          score.
+        </p>
       </div>
 
       {projects.length > 0 && (

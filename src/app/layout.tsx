@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Seos",
-  description: "AI SEO program — fix your site's score from the inside",
+  title: "Seos — AI Growth Engineer",
+  description: "The AI Growth Engineer for your website — become the answer AI assistants recommend, not just another SEO score.",
 };
 
 export default function RootLayout({
