@@ -549,6 +549,14 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     return parts.join("\n");
   }
 
+  function fmtDelta(n: number): string {
+    return n > 0 ? `+${n}` : `${n}`;
+  }
+
+  function deltaClass(n: number): string {
+    return n > 0 ? "text-green-400" : n < 0 ? "text-red-400" : "text-muted-foreground";
+  }
+
   async function handleGenerateCitationDraft(query: string) {
     setDraftingQuery(query);
     setDraftGapErrors((prev) => ({ ...prev, [query]: "" }));
@@ -1702,6 +1710,33 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                       ({aiVisibility.scorecard.totalSamples} samples · {new Date(aiVisibility.runAt).toLocaleString()})
                     </span>
                   </div>
+                  {aiVisibility.delta && (
+                    <div className="flex flex-col gap-1 rounded-md border border-white/10 bg-black/20 p-2">
+                      <span className="text-xs text-muted-foreground">
+                        Since last run ({new Date(aiVisibility.delta.previousRunAt).toLocaleString()}):
+                      </span>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                        <span className={deltaClass(aiVisibility.delta.mentionedPctDelta)}>
+                          Mentioned {fmtDelta(aiVisibility.delta.mentionedPctDelta)}%
+                        </span>
+                        <span className={deltaClass(aiVisibility.delta.openPctDelta)}>
+                          Open {fmtDelta(aiVisibility.delta.openPctDelta)}%
+                        </span>
+                        <span className="text-muted-foreground">
+                          Contested {fmtDelta(aiVisibility.delta.contestedPctDelta)}%
+                        </span>
+                      </div>
+                      {aiVisibility.delta.changes.length > 0 && (
+                        <ul className="list-disc pl-5 text-xs text-muted-foreground">
+                          {aiVisibility.delta.changes.map((c) => (
+                            <li key={c.query}>
+                              {c.query}: {c.from} → {c.to}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                   {aiVisibility.scorecard.competitorFrequency.length > 0 && (
                     <p className="text-muted-foreground">
                       Competitors dominating:{" "}

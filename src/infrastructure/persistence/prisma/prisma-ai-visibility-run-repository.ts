@@ -56,4 +56,22 @@ export class PrismaAiVisibilityRunRepository implements AiVisibilityRunRepositor
       outcomes: toDomainOutcomes(row.outcomes),
     });
   }
+
+  async findRecentByProjectId(projectId: string, limit: number): Promise<AiVisibilityProbeRun[]> {
+    const rows = await this.client.aiVisibilityProbeRun.findMany({
+      where: { projectId },
+      orderBy: { runAt: "desc" },
+      take: limit,
+    });
+
+    return rows.map((row) =>
+      AiVisibilityProbeRun.reconstitute({
+        id: row.id,
+        projectId: row.projectId,
+        samplesPerQuery: row.samplesPerQuery,
+        runAt: row.runAt,
+        outcomes: toDomainOutcomes(row.outcomes),
+      })
+    );
+  }
 }

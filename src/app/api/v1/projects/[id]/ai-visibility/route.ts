@@ -37,8 +37,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const run = await new PrismaAiVisibilityRunRepository(prisma).findLatestByProjectId(projectId);
-  return NextResponse.json(run ? toAiVisibilityRunDto(run) : null);
+  const recent = await new PrismaAiVisibilityRunRepository(prisma).findRecentByProjectId(projectId, 2);
+  if (recent.length === 0) return NextResponse.json(null);
+  return NextResponse.json(toAiVisibilityRunDto(recent[0], recent[1] ?? null));
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -73,15 +74,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     queries,
   };
 
+  const runRepository = new PrismaAiVisibilityRunRepository(prisma);
   const useCase = new RunAiVisibilityProbeUseCase({
     model: new DynamicAiVisibilityModel(new PrismaLlmSettingsRepository(prisma), new ConsoleLogger()),
-    runRepository: new PrismaAiVisibilityRunRepository(prisma),
+    runRepository,
     samplesPerQuery,
   });
 
   try {
     const run = await useCase.execute(projectId, target);
-    return NextResponse.json(toAiVisibilityRunDto(run));
+    // The run just saved is the newest; the one before it is the baseline to
+    // show movement against.
+    const recent = await runRepository.findRecentByProjectId(projectId, 2);
+    const previous = recent.find((r) => r.id !== run.id) ?? null;
+    return NextResponse.json(toAiVisibilityRunDto(run, previous));
   } catch (error) {
     if (error instanceof AiVisibilityProviderNotConfiguredError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });

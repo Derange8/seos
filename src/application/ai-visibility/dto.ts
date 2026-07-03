@@ -2,6 +2,7 @@ import type { AiVisibilityProbeRun } from "@/domain/ai-visibility/entities/probe
 import type { Slot } from "@/domain/ai-visibility/slot";
 import { dominantSlot } from "@/domain/ai-visibility/slot";
 import { buildScorecard, type AiVisibilityScorecard } from "@/domain/ai-visibility/services/scorecard";
+import { computeAiVisibilityDelta, type AiVisibilityDelta } from "@/domain/ai-visibility/services/delta";
 
 export interface AiVisibilityQueryDto {
   query: string;
@@ -17,13 +18,19 @@ export interface AiVisibilityRunDto {
   samplesPerQuery: number;
   scorecard: AiVisibilityScorecard;
   queries: AiVisibilityQueryDto[];
+  // Movement vs the previous run, when one exists — the re-measure payoff.
+  delta: AiVisibilityDelta | null;
 }
 
-export function toAiVisibilityRunDto(run: AiVisibilityProbeRun): AiVisibilityRunDto {
+export function toAiVisibilityRunDto(
+  run: AiVisibilityProbeRun,
+  previous: AiVisibilityProbeRun | null = null
+): AiVisibilityRunDto {
   return {
     runAt: run.runAt.toISOString(),
     samplesPerQuery: run.samplesPerQuery,
     scorecard: buildScorecard(run.outcomes),
+    delta: previous ? computeAiVisibilityDelta(previous, run) : null,
     queries: run.outcomes.map((o) => ({
       query: o.query,
       dominantSlot: dominantSlot(o.slots),

@@ -50,6 +50,7 @@ function runRepo(run: AiVisibilityProbeRun | null): AiVisibilityRunRepositoryPor
   return {
     save: vi.fn(),
     findLatestByProjectId: vi.fn().mockResolvedValue(run),
+    findRecentByProjectId: vi.fn().mockResolvedValue(run ? [run] : []),
   };
 }
 

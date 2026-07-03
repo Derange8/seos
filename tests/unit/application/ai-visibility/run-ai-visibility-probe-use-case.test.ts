@@ -50,6 +50,9 @@ class FakeRunRepository implements AiVisibilityRunRepositoryPort {
   async findLatestByProjectId(): Promise<AiVisibilityProbeRun | null> {
     return this.saved[this.saved.length - 1] ?? null;
   }
+  async findRecentByProjectId(): Promise<AiVisibilityProbeRun[]> {
+    return [...this.saved].reverse();
+  }
 }
 
 function slotsFor(run: AiVisibilityProbeRun, query: string) {

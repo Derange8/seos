@@ -68,4 +68,11 @@ describe("PrismaAiVisibilityRunRepository", () => {
     const found = await repository.findLatestByProjectId(projectId);
     expect(found?.outcomes[0]?.query).toBe("new");
   });
+
+  it("findRecentByProjectId returns most-recent-first, capped at the limit", async () => {
+    const recent = await repository.findRecentByProjectId(projectId, 2);
+    expect(recent).toHaveLength(2);
+    // Newest first: the 2026-07-15 run saved above, then 2026-07-01.
+    expect(recent[0].runAt.getTime()).toBeGreaterThan(recent[1].runAt.getTime());
+  });
 });
