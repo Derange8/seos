@@ -56,14 +56,29 @@ export function startAutoPilotScheduler(crawlQueue: InProcessCrawlQueue, logger:
 
   // Same per-project isolation as the Google tracking scheduler's tick() —
   // one project's failure must never stop the rest from being checked.
+  let isTicking = false;
   async function tick(): Promise<void> {
-    const projects = await projectRepository.findAll();
-    for (const project of projects) {
-      try {
-        await tickForProject(project);
-      } catch (error) {
-        logger.error("Otomatik Pilot scheduler tick failed", { projectId: project.id, error: String(error) });
+    // setInterval doesn't wait for a previous async callback to finish — if
+    // checking every project ever takes longer than CHECK_INTERVAL_MS (many
+    // projects, or a slow/hung crawl-start call), the next tick would
+    // otherwise start concurrently and could race a still-in-flight
+    // tickForProject for the same project.
+    if (isTicking) {
+      logger.warn("Otomatik Pilot scheduler tick still running, skipping this interval");
+      return;
+    }
+    isTicking = true;
+    try {
+      const projects = await projectRepository.findAll();
+      for (const project of projects) {
+        try {
+          await tickForProject(project);
+        } catch (error) {
+          logger.error("Otomatik Pilot scheduler tick failed", { projectId: project.id, error: String(error) });
+        }
       }
+    } finally {
+      isTicking = false;
     }
   }
 

@@ -76,6 +76,7 @@ export class FakePageRepository implements PageRepositoryPort {
 export class FakeCrawlQueuePort implements CrawlQueuePort {
   readonly enqueued: PageTask[] = [];
   readonly finished: string[] = [];
+  readonly cleared: string[] = [];
   pendingOverride: number | null = null;
 
   async enqueue(task: PageTask): Promise<void> {
@@ -93,6 +94,10 @@ export class FakeCrawlQueuePort implements CrawlQueuePort {
   async countPendingForCrawlJob(crawlJobId: string): Promise<number> {
     if (this.pendingOverride !== null) return this.pendingOverride;
     return this.enqueued.filter((task) => task.crawlJobId === crawlJobId).length;
+  }
+
+  async clearJob(crawlJobId: string): Promise<void> {
+    this.cleared.push(crawlJobId);
   }
 }
 

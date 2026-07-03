@@ -26,4 +26,9 @@ export interface CrawlQueuePort {
   // Used to detect "the crawl job has nothing left to process" (Crawler
   // Engine design §4 job-completion condition).
   countPendingForCrawlJob(crawlJobId: string): Promise<number>;
+  // Called once a crawl job has been finalized (COMPLETED/FAILED) — drops
+  // any per-job dedup/bookkeeping state the implementation keeps (e.g.
+  // InProcessCrawlQueue's `seen` set), so a long-lived process doesn't
+  // accumulate an entry per crawl job forever.
+  clearJob(crawlJobId: string): Promise<void>;
 }

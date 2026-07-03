@@ -145,6 +145,27 @@ describe("InProcessCrawlQueue", () => {
     expect(active).toBe(0);
   });
 
+  it("clearJob drops the job's dedup and pending-count bookkeeping", async () => {
+    const queue = new InProcessCrawlQueue(5);
+    queue.setRunner(async () => {});
+
+    await queue.enqueue(task());
+    expect(await queue.countPendingForCrawlJob("job-1")).toBe(1);
+
+    await queue.clearJob("job-1");
+    expect(await queue.countPendingForCrawlJob("job-1")).toBe(0);
+
+    // Dedup state is gone too — the same url is accepted again as if it
+    // were never seen, same as a genuinely new crawl job would behave.
+    const seen: PageTask[] = [];
+    queue.setRunner(async (t) => {
+      seen.push(t);
+    });
+    await queue.enqueue(task());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(seen).toHaveLength(1);
+  });
+
   it("processes shallower (lower-depth) waiting tasks before deeper ones", async () => {
     const queue = new InProcessCrawlQueue(1); // concurrency 1 makes order observable
     const order: number[] = [];

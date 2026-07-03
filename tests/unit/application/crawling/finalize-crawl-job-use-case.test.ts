@@ -87,6 +87,34 @@ describe("FinalizeCrawlJobIfDoneUseCase", () => {
     expect(job.status).toBe("COMPLETED");
   });
 
+  it("clears the queue's per-job bookkeeping once the job completes", async () => {
+    const crawlJobRepository = new FakeCrawlJobRepository();
+    const job = CrawlJob.create("project-1", config());
+    job.start();
+    crawlJobRepository.seed(job);
+    const queue = new FakeCrawlQueuePort();
+    queue.pendingOverride = 0;
+    const useCase = new FinalizeCrawlJobIfDoneUseCase({ crawlJobRepository, queue, logger: new SilentLogger() });
+
+    await useCase.execute(job.id);
+
+    expect(queue.cleared).toEqual([job.id]);
+  });
+
+  it("does not clear the queue's bookkeeping when the job does not complete", async () => {
+    const crawlJobRepository = new FakeCrawlJobRepository();
+    const job = CrawlJob.create("project-1", config());
+    job.start();
+    crawlJobRepository.seed(job);
+    const queue = new FakeCrawlQueuePort();
+    queue.pendingOverride = 3; // still pending, won't complete
+    const useCase = new FinalizeCrawlJobIfDoneUseCase({ crawlJobRepository, queue, logger: new SilentLogger() });
+
+    await useCase.execute(job.id);
+
+    expect(queue.cleared).toEqual([]);
+  });
+
   it("dispatches CrawlJobCompleted once the job completes, when a dispatcher is provided", async () => {
     const crawlJobRepository = new FakeCrawlJobRepository();
     const job = CrawlJob.create("project-1", config());

@@ -36,6 +36,7 @@ export class FinalizeCrawlJobIfDoneUseCase {
       return;
     }
     await crawlJobRepository.save(crawlJob);
+    await queue.clearJob(crawlJobId);
 
     if (eventDispatcher) {
       await eventDispatcher.dispatch(crawlJob.pullDomainEvents());

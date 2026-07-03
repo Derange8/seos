@@ -48,6 +48,11 @@ export class InProcessCrawlQueue implements CrawlQueuePort {
     return this.pendingCounts.get(crawlJobId) ?? 0;
   }
 
+  async clearJob(crawlJobId: string): Promise<void> {
+    this.seen.delete(crawlJobId);
+    this.pendingCounts.delete(crawlJobId);
+  }
+
   private enqueueOne(task: PageTask): void {
     const seenSet = this.seen.get(task.crawlJobId) ?? new Set<string>();
     this.seen.set(task.crawlJobId, seenSet);

@@ -95,14 +95,30 @@ export function startGoogleTrackingScheduler(logger: Logger): { stop(): void } {
   // One project failing (a revoked token, a transient API error) must not
   // stop the rest from being checked — isolated per-project, same principle
   // as DomainEventDispatcher's per-handler try/catch.
+  let isTicking = false;
   async function tick(): Promise<void> {
-    const projects = await new PrismaProjectRepository(prisma).findAll();
-    for (const project of projects) {
-      try {
-        await tickForProject(project);
-      } catch (error) {
-        logger.error("Google tracking scheduler tick failed", { projectId: project.id, error: String(error) });
+    // setInterval doesn't wait for a previous async callback to finish — if
+    // checking every project ever takes longer than CHECK_INTERVAL_MS (many
+    // projects, or a slow/hung Google API call), the next tick would
+    // otherwise start concurrently and could race a still-in-flight
+    // tickForProject for the same project (e.g. two overlapping
+    // replaceForProject calls for the same project's keyword data).
+    if (isTicking) {
+      logger.warn("Google tracking scheduler tick still running, skipping this interval");
+      return;
+    }
+    isTicking = true;
+    try {
+      const projects = await new PrismaProjectRepository(prisma).findAll();
+      for (const project of projects) {
+        try {
+          await tickForProject(project);
+        } catch (error) {
+          logger.error("Google tracking scheduler tick failed", { projectId: project.id, error: String(error) });
+        }
       }
+    } finally {
+      isTicking = false;
     }
   }
 
