@@ -250,6 +250,9 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [aiVisibilityError, setAiVisibilityError] = useState<string | null>(null);
   const [aiVisibilityQueries, setAiVisibilityQueries] = useState("");
   const [aiVisibilityCompetitors, setAiVisibilityCompetitors] = useState("");
+  const [diagnosingQuery, setDiagnosingQuery] = useState<string | null>(null);
+  const [diagnoses, setDiagnoses] = useState<Record<string, string[]>>({});
+  const [diagnoseErrors, setDiagnoseErrors] = useState<Record<string, string>>({});
 
   const [contentDrafts, setContentDrafts] = useState<PageContentDraftDto[]>([]);
   const [draftPageUrl, setDraftPageUrl] = useState("");
@@ -503,6 +506,32 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     }
     setAiVisibilityQueries((data.queries ?? []).join("\n"));
     setAiVisibilityCompetitors((data.competitors ?? []).join(", "));
+  }
+
+  async function handleDiagnoseGap(query: string) {
+    setDiagnosingQuery(query);
+    setDiagnoseErrors((prev) => ({ ...prev, [query]: "" }));
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${project.id}/ai-visibility/diagnose`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+    } catch {
+      setDiagnosingQuery(null);
+      setDiagnoseErrors((prev) => ({ ...prev, [query]: "Network error — try again." }));
+      return;
+    }
+    const data = await response.json();
+
+    setDiagnosingQuery(null);
+    if (!response.ok) {
+      setDiagnoseErrors((prev) => ({ ...prev, [query]: data.error ?? "Failed to diagnose" }));
+      return;
+    }
+    setDiagnoses((prev) => ({ ...prev, [query]: data.gaps ?? [] }));
   }
 
   async function handleRunAiVisibilityProbe() {
@@ -1640,19 +1669,36 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                       </ul>
                     </div>
                   )}
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-2">
                     {aiVisibility.queries.map((q) => (
-                      <div
-                        key={q.query}
-                        className="flex items-center justify-between gap-2 border-b border-white/5 py-1"
-                      >
-                        <span className="truncate">{q.query}</span>
-                        <span className="flex items-center gap-2 whitespace-nowrap">
-                          <Badge variant="outline">{q.dominantSlot}</Badge>
-                          <span className="text-xs text-muted-foreground">
-                            M{q.mentioned}/O{q.open}/C{q.contested}
+                      <div key={q.query} className="flex flex-col gap-1 border-b border-white/5 py-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate">{q.query}</span>
+                          <span className="flex items-center gap-2 whitespace-nowrap">
+                            <Badge variant="outline">{q.dominantSlot}</Badge>
+                            <span className="text-xs text-muted-foreground">
+                              M{q.mentioned}/O{q.open}/C{q.contested}
+                            </span>
+                            {q.dominantSlot !== "MENTIONED" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDiagnoseGap(q.query)}
+                                disabled={diagnosingQuery === q.query}
+                              >
+                                {diagnosingQuery === q.query ? "Diagnosing…" : "Why not?"}
+                              </Button>
+                            )}
                           </span>
-                        </span>
+                        </div>
+                        {diagnoseErrors[q.query] && <p className="text-xs text-red-400">{diagnoseErrors[q.query]}</p>}
+                        {diagnoses[q.query] && (
+                          <ul className="list-disc pl-5 text-xs text-muted-foreground">
+                            {diagnoses[q.query].map((gap, i) => (
+                              <li key={i}>{gap}</li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     ))}
                   </div>
