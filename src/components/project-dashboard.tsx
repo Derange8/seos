@@ -174,6 +174,131 @@ const EVENT_TYPE_LABEL: Record<string, string> = {
   AuditRunCompleted: "Processing the audit results",
 };
 
+// Extracted from the audit issue list so the same row markup can render
+// both a rule's directly-listed issues and the issues inside an expanded
+// route-template sub-group (e.g. /post/[id]) without duplicating this
+// (fairly large) block of fix-action JSX in two places.
+function IssueRow({
+  issue,
+  fix,
+  wordPressConnection,
+  fixActionErrors,
+  copiedFixId,
+  fixActionPendingId,
+  onCopyFix,
+  onApplyFix,
+  onRevertFix,
+  t,
+}: {
+  issue: AuditIssueDto;
+  fix: FixCandidateDto | undefined;
+  wordPressConnection: WordPressConnectionDto | null;
+  fixActionErrors: Record<string, string>;
+  copiedFixId: string | null;
+  fixActionPendingId: string | null;
+  onCopyFix: (fixId: string, content: string) => void;
+  onApplyFix: (fixId: string) => void;
+  onRevertFix: (fixId: string) => void;
+  t: (key: TranslationKey) => string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b py-1">
+      <div>
+        <p>{issue.message}</p>
+        <p className="text-xs text-muted-foreground">
+          {issue.ruleId} · {issue.category}
+        </p>
+        {issue.recommendation ? (
+          <p className="mt-1 text-xs italic text-zinc-600 dark:text-muted-foreground/70">{issue.recommendation}</p>
+        ) : (
+          <p className="mt-1 text-xs text-muted-foreground/70">Generating recommendation…</p>
+        )}
+        {fix && (
+          <div className="mt-2 flex items-start gap-2 rounded-lg border border-white/10 bg-black/20 p-2">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-muted-foreground">
+                {FIX_TYPE_LABEL[fix.type] ?? fix.type} fix
+                {fix.status === "APPLIED" && <span className="ml-2 text-green-400">Applied</span>}
+                {fix.status === "FAILED" && <span className="ml-2 text-red-400">Apply failed</span>}
+              </p>
+              {/* Only TITLE/META_DESCRIPTION can ever be auto-applied (see the
+                  Approve & Apply button below), and only with WordPress connected
+                  — say so plainly here too, since this box is the first thing a
+                  user sees and "Quick win" elsewhere could otherwise read as a
+                  promise this tool can't keep for H1/CANONICAL_URL fixes or
+                  without a WordPress connection. */}
+              {fix.type === "TITLE" || fix.type === "META_DESCRIPTION" ? (
+                !wordPressConnection && (
+                  <p className="text-xs text-muted-foreground/70">
+                    Connect WordPress to apply this automatically — for now, copy it in manually.
+                  </p>
+                )
+              ) : (
+                <p className="text-xs text-muted-foreground/70">No automatic apply for this fix type yet — copy it in manually.</p>
+              )}
+              <p className="text-xs">{fix.content}</p>
+              {/* META_DESCRIPTION applies to WordPress's core "excerpt" field —
+                  a real, always-writable field, but not guaranteed to be what the
+                  live page's <meta name="description"> tag actually renders (that
+                  depends on the site's theme/SEO plugin — Yoast/RankMath usually
+                  override it with their own field). Said upfront, not just after
+                  the fact, so "Applied" isn't read with TITLE's same certainty. */}
+              {fix.type === "META_DESCRIPTION" && wordPressConnection && (
+                <p className="mt-1 text-xs text-amber-400">
+                  Applies to WordPress&apos;s excerpt field — whether this changes your live meta description tag
+                  depends on your theme/SEO plugin.
+                </p>
+              )}
+              {fixActionErrors[fix.id] && <p className="mt-1 text-xs text-red-400">{fixActionErrors[fix.id]}</p>}
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <Button variant="outline" size="sm" onClick={() => onCopyFix(fix.id, fix.content)}>
+                {copiedFixId === fix.id ? t("copied") : t("copy")}
+              </Button>
+              {/* Only TITLE and META_DESCRIPTION fixes can be pushed to WordPress
+                  today — see ApplyFixCandidateUseCase's MVP scope. */}
+              {(fix.type === "TITLE" || fix.type === "META_DESCRIPTION") &&
+                wordPressConnection &&
+                fix.status !== "APPLIED" && (
+                  <Button size="sm" disabled={fixActionPendingId === fix.id} onClick={() => onApplyFix(fix.id)}>
+                    {fixActionPendingId === fix.id ? t("applying") : t("approveApply")}
+                  </Button>
+                )}
+              {(fix.type === "TITLE" || fix.type === "META_DESCRIPTION") &&
+                wordPressConnection &&
+                fix.status === "APPLIED" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={fixActionPendingId === fix.id}
+                    onClick={() => onRevertFix(fix.id)}
+                  >
+                    {fixActionPendingId === fix.id ? t("reverting") : t("revert")}
+                  </Button>
+                )}
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col items-end gap-1">
+        <Badge variant={SEVERITY_BADGE_VARIANT[issue.severity] ?? "default"}>{issue.severity}</Badge>
+        <span className="text-xs text-muted-foreground">{PRIORITY_TIER_LABEL[issue.priority.tier] ?? issue.priority.tier}</span>
+        <span
+          className="text-xs text-muted-foreground"
+          title={
+            issue.trafficImpact.hasTrafficData
+              ? `${issue.trafficImpact.pageImpressions} impressions / ${issue.trafficImpact.pageClicks} clicks (last 30 days)`
+              : "No Search Console traffic data for this page yet — ranked by severity only"
+          }
+        >
+          {issue.trafficImpact.tier} traffic impact
+          {issue.trafficImpact.hasTrafficData ? ` (${issue.trafficImpact.pageImpressions} impr.)` : " (no data yet)"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function ProjectDashboard({ project: initialProject }: { project: ProjectDto }) {
   const [project, setProject] = useState(initialProject);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
@@ -1177,6 +1302,16 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   // Preserves first-seen order (already roughly priority-sorted by the
   // backend) rather than re-sorting groups by size — a CRITICAL rule
   // affecting 2 pages should still surface above an INFO rule affecting 20.
+  //
+  // Within a rule, issues are further split by routeTemplate (e.g.
+  // /post/[id]) — a rule firing on 12 /post/[id] instances and 10
+  // /profile/[id] instances is two structurally distinct fixes ("fix the
+  // post template" vs "fix the profile template"), not one flat pile of
+  // 22 rows. Only templates with 2+ affected pages get their own
+  // collapsible sub-summary; issues with no template match (routeTemplate
+  // null, e.g. no page URL available) or a template that only matched one
+  // page fall back to being listed individually, same as before this
+  // grouping existed.
   const issueGroups = useMemo(() => {
     if (!auditRun) return [];
     const order: string[] = [];
@@ -1190,7 +1325,29 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
         order.push(issue.ruleId);
       }
     }
-    return order.map((ruleId) => ({ ruleId, issues: byRule.get(ruleId) ?? [] }));
+    return order.map((ruleId) => {
+      const issues = byRule.get(ruleId) ?? [];
+
+      const templateOrder: string[] = [];
+      const byTemplate = new Map<string, AuditIssueDto[]>();
+      for (const issue of issues) {
+        if (!issue.routeTemplate) continue;
+        const existing = byTemplate.get(issue.routeTemplate);
+        if (existing) existing.push(issue);
+        else {
+          byTemplate.set(issue.routeTemplate, [issue]);
+          templateOrder.push(issue.routeTemplate);
+        }
+      }
+
+      const templateGroups = templateOrder
+        .map((routeTemplate) => ({ routeTemplate, issues: byTemplate.get(routeTemplate) ?? [] }))
+        .filter((group) => group.issues.length > 1);
+      const templatedIssueIds = new Set(templateGroups.flatMap((group) => group.issues.map((issue) => issue.id)));
+      const ungroupedIssues = issues.filter((issue) => !templatedIssueIds.has(issue.id));
+
+      return { ruleId, issues, templateGroups, ungroupedIssues };
+    });
   }, [auditRun]);
 
   return (
@@ -1543,124 +1700,77 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                               <span>{isExpanded ? "Hide" : "Show"} pages</span>
                             </button>
                           )}
+                          {isExpanded && group.templateGroups.length > 0 && (
+                            <div className="flex flex-col gap-1 pl-3">
+                              {group.templateGroups.map((templateGroup) => {
+                                const templateKey = `${group.ruleId}::${templateGroup.routeTemplate}`;
+                                const isTemplateExpanded = expandedRuleIds.has(templateKey);
+                                return (
+                                  <div key={templateKey} className="flex flex-col gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleRuleExpanded(templateKey)}
+                                      className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-white/10"
+                                    >
+                                      <span>
+                                        <span className="font-mono text-foreground">{templateGroup.routeTemplate}</span>
+                                        {" — "}
+                                        {templateGroup.issues.length} pages match this template (e.g.{" "}
+                                        {templateGroup.issues
+                                          .slice(0, 2)
+                                          .map((issue) => issue.pageUrl)
+                                          .filter(Boolean)
+                                          .join(", ")}
+                                        {templateGroup.issues.length > 2 ? ", …" : ""}) — fixing the template fixes
+                                        all of them
+                                      </span>
+                                      <span>{isTemplateExpanded ? "Hide" : "Show"} pages</span>
+                                    </button>
+                                    {isTemplateExpanded &&
+                                      templateGroup.issues.map((issue) => (
+                                        <IssueRow
+                                          key={issue.id}
+                                          issue={issue}
+                                          fix={fixCandidates.find((candidate) => candidate.auditIssueId === issue.id)}
+                                          wordPressConnection={wordPressConnection}
+                                          fixActionErrors={fixActionErrors}
+                                          copiedFixId={copiedFixId}
+                                          fixActionPendingId={fixActionPendingId}
+                                          onCopyFix={(fixId, content) => {
+                                            void navigator.clipboard.writeText(content);
+                                            setCopiedFixId(fixId);
+                                            setTimeout(() => setCopiedFixId((id) => (id === fixId ? null : id)), 1500);
+                                          }}
+                                          onApplyFix={handleApplyFix}
+                                          onRevertFix={handleRevertFix}
+                                          t={t}
+                                        />
+                                      ))}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                           {isExpanded &&
-                            group.issues.map((issue) => {
-                              const fix = fixCandidates.find((candidate) => candidate.auditIssueId === issue.id);
-                              return (
-                                <div key={issue.id} className="flex items-start justify-between gap-3 border-b py-1">
-                          <div>
-                            <p>{issue.message}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {issue.ruleId} · {issue.category}
-                            </p>
-                            {issue.recommendation ? (
-                              <p className="mt-1 text-xs italic text-zinc-600 dark:text-muted-foreground/70">
-                                {issue.recommendation}
-                              </p>
-                            ) : (
-                              <p className="mt-1 text-xs text-muted-foreground/70">Generating recommendation…</p>
-                            )}
-                            {fix && (
-                              <div className="mt-2 flex items-start gap-2 rounded-lg border border-white/10 bg-black/20 p-2">
-                                <div className="flex-1">
-                                  <p className="text-xs font-medium text-muted-foreground">
-                                    {FIX_TYPE_LABEL[fix.type] ?? fix.type} fix
-                                    {fix.status === "APPLIED" && <span className="ml-2 text-green-400">Applied</span>}
-                                    {fix.status === "FAILED" && <span className="ml-2 text-red-400">Apply failed</span>}
-                                  </p>
-                                  {/* Only TITLE/META_DESCRIPTION can ever be auto-applied (see the
-                                      Approve & Apply button below), and only with WordPress connected
-                                      — say so plainly here too, since this box is the first thing a
-                                      user sees and "Quick win" elsewhere could otherwise read as a
-                                      promise this tool can't keep for H1/CANONICAL_URL fixes or
-                                      without a WordPress connection. */}
-                                  {fix.type === "TITLE" || fix.type === "META_DESCRIPTION" ? (
-                                    !wordPressConnection && (
-                                      <p className="text-xs text-muted-foreground/70">
-                                        Connect WordPress to apply this automatically — for now, copy it in manually.
-                                      </p>
-                                    )
-                                  ) : (
-                                    <p className="text-xs text-muted-foreground/70">
-                                      No automatic apply for this fix type yet — copy it in manually.
-                                    </p>
-                                  )}
-                                  <p className="text-xs">{fix.content}</p>
-                                  {/* META_DESCRIPTION applies to WordPress's core "excerpt" field —
-                                      a real, always-writable field, but not guaranteed to be what the
-                                      live page's <meta name="description"> tag actually renders (that
-                                      depends on the site's theme/SEO plugin — Yoast/RankMath usually
-                                      override it with their own field). Said upfront, not just after
-                                      the fact, so "Applied" isn't read with TITLE's same certainty. */}
-                                  {fix.type === "META_DESCRIPTION" && wordPressConnection && (
-                                    <p className="mt-1 text-xs text-amber-400">
-                                      Applies to WordPress&apos;s excerpt field — whether this changes your live meta
-                                      description tag depends on your theme/SEO plugin.
-                                    </p>
-                                  )}
-                                  {fixActionErrors[fix.id] && (
-                                    <p className="mt-1 text-xs text-red-400">{fixActionErrors[fix.id]}</p>
-                                  )}
-                                </div>
-                                <div className="flex flex-col items-end gap-1">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      void navigator.clipboard.writeText(fix.content);
-                                      setCopiedFixId(fix.id);
-                                      setTimeout(() => setCopiedFixId((id) => (id === fix.id ? null : id)), 1500);
-                                    }}
-                                  >
-                                    {copiedFixId === fix.id ? t("copied") : t("copy")}
-                                  </Button>
-                                  {/* Only TITLE and META_DESCRIPTION fixes can be pushed to WordPress
-                                      today — see ApplyFixCandidateUseCase's MVP scope. */}
-                                  {(fix.type === "TITLE" || fix.type === "META_DESCRIPTION") && wordPressConnection && fix.status !== "APPLIED" && (
-                                    <Button
-                                      size="sm"
-                                      disabled={fixActionPendingId === fix.id}
-                                      onClick={() => handleApplyFix(fix.id)}
-                                    >
-                                      {fixActionPendingId === fix.id ? t("applying") : t("approveApply")}
-                                    </Button>
-                                  )}
-                                  {(fix.type === "TITLE" || fix.type === "META_DESCRIPTION") && wordPressConnection && fix.status === "APPLIED" && (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      disabled={fixActionPendingId === fix.id}
-                                      onClick={() => handleRevertFix(fix.id)}
-                                    >
-                                      {fixActionPendingId === fix.id ? t("reverting") : t("revert")}
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                            <Badge variant={SEVERITY_BADGE_VARIANT[issue.severity] ?? "default"}>{issue.severity}</Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {PRIORITY_TIER_LABEL[issue.priority.tier] ?? issue.priority.tier}
-                            </span>
-                            <span
-                              className="text-xs text-muted-foreground"
-                              title={
-                                issue.trafficImpact.hasTrafficData
-                                  ? `${issue.trafficImpact.pageImpressions} impressions / ${issue.trafficImpact.pageClicks} clicks (last 30 days)`
-                                  : "No Search Console traffic data for this page yet — ranked by severity only"
-                              }
-                            >
-                              {issue.trafficImpact.tier} traffic impact
-                              {issue.trafficImpact.hasTrafficData
-                                ? ` (${issue.trafficImpact.pageImpressions} impr.)`
-                                : " (no data yet)"}
-                            </span>
-                          </div>
-                                </div>
-                              );
-                            })}
+                            group.ungroupedIssues.map((issue) => (
+                              <IssueRow
+                                key={issue.id}
+                                issue={issue}
+                                fix={fixCandidates.find((candidate) => candidate.auditIssueId === issue.id)}
+                                wordPressConnection={wordPressConnection}
+                                fixActionErrors={fixActionErrors}
+                                copiedFixId={copiedFixId}
+                                fixActionPendingId={fixActionPendingId}
+                                onCopyFix={(fixId, content) => {
+                                  void navigator.clipboard.writeText(content);
+                                  setCopiedFixId(fixId);
+                                  setTimeout(() => setCopiedFixId((id) => (id === fixId ? null : id)), 1500);
+                                }}
+                                onApplyFix={handleApplyFix}
+                                onRevertFix={handleRevertFix}
+                                t={t}
+                              />
+                            ))}
                         </div>
                       );
                     })}

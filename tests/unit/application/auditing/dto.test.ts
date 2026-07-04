@@ -80,6 +80,55 @@ describe("toAuditRunDto", () => {
     expect(quiet?.trafficImpact).toEqual({ tier: "P3", pageImpressions: 0, pageClicks: 0, hasTrafficData: false });
   });
 
+  it("attaches pageUrl and a shared routeTemplate to issues on same-shaped page URLs", () => {
+    const auditRun = AuditRun.create("project-1", "job-1");
+    const post1 = AuditIssue.create(auditRun.id, "page-post-1", {
+      ruleId: "thin-content",
+      category: "content",
+      severity: "WARNING",
+      message: "thin",
+    });
+    const post2 = AuditIssue.create(auditRun.id, "page-post-2", {
+      ruleId: "thin-content",
+      category: "content",
+      severity: "WARNING",
+      message: "thin",
+    });
+    auditRun.addIssue(post1);
+    auditRun.addIssue(post2);
+    auditRun.finish(2);
+
+    const pageUrlsByPageId = new Map([
+      ["page-post-1", "https://example.com/post/1"],
+      ["page-post-2", "https://example.com/post/2"],
+    ]);
+
+    const dto = toAuditRunDto(auditRun, [], pageUrlsByPageId);
+
+    const dto1 = dto.issues.find((issue) => issue.id === post1.id);
+    const dto2 = dto.issues.find((issue) => issue.id === post2.id);
+    expect(dto1?.pageUrl).toBe("https://example.com/post/1");
+    expect(dto1?.routeTemplate).toBe("/post/[id]");
+    expect(dto2?.routeTemplate).toBe("/post/[id]");
+  });
+
+  it("defaults pageUrl/routeTemplate to null when no page URL map is supplied", () => {
+    const auditRun = AuditRun.create("project-1", "job-1");
+    const issue = AuditIssue.create(auditRun.id, "page-1", {
+      ruleId: "missing-title",
+      category: "technical",
+      severity: "CRITICAL",
+      message: "no title",
+    });
+    auditRun.addIssue(issue);
+    auditRun.finish(1);
+
+    const dto = toAuditRunDto(auditRun);
+
+    expect(dto.issues[0]?.pageUrl).toBeNull();
+    expect(dto.issues[0]?.routeTemplate).toBeNull();
+  });
+
   it("defaults trafficImpact to severity-only ranking with hasTrafficData false when no traffic data is supplied", () => {
     const auditRun = AuditRun.create("project-1", "job-1");
     const issue = AuditIssue.create(auditRun.id, "page-1", {

@@ -46,6 +46,8 @@ describe("formatAuditReport", () => {
         {
           id: "issue-1",
           pageId: "page-1",
+          pageUrl: null,
+          routeTemplate: null,
           ruleId: "missing-title",
           category: "technical",
           severity: "CRITICAL",
@@ -68,6 +70,8 @@ describe("formatAuditReport", () => {
         {
           id: "issue-1",
           pageId: "page-1",
+          pageUrl: null,
+          routeTemplate: null,
           ruleId: "missing-title",
           category: "technical",
           severity: "CRITICAL",
@@ -91,6 +95,8 @@ describe("formatAuditReport", () => {
         {
           id: "issue-1",
           pageId: "page-1",
+          pageUrl: null,
+          routeTemplate: null,
           ruleId: "thin-content",
           category: "content",
           severity: "WARNING",
@@ -106,6 +112,44 @@ describe("formatAuditReport", () => {
 
     expect(report).not.toContain("Recommendation:");
     expect(report).not.toContain("Suggested fix");
+  });
+
+  it("collapses issues sharing a ruleId and routeTemplate into one summary entry", () => {
+    const auditRun = baseAuditRun({
+      issues: [
+        {
+          id: "issue-1",
+          pageId: "page-1",
+          pageUrl: "https://example.com/post/1",
+          routeTemplate: "/post/[id]",
+          ruleId: "thin-content",
+          category: "content",
+          severity: "WARNING",
+          message: "thin content",
+          recommendation: null,
+          priority: { tier: "LOW_PRIORITY", impactScore: 4, hasReadyFix: false },
+          trafficImpact: { tier: "P4", pageImpressions: 0, pageClicks: 0, hasTrafficData: false },
+        },
+        {
+          id: "issue-2",
+          pageId: "page-2",
+          pageUrl: "https://example.com/post/2",
+          routeTemplate: "/post/[id]",
+          ruleId: "thin-content",
+          category: "content",
+          severity: "WARNING",
+          message: "thin content",
+          recommendation: null,
+          priority: { tier: "LOW_PRIORITY", impactScore: 4, hasReadyFix: false },
+          trafficImpact: { tier: "P4", pageImpressions: 0, pageClicks: 0, hasTrafficData: false },
+        },
+      ],
+    });
+
+    const report = formatAuditReport("example.com", auditRun, []);
+
+    expect(report).toContain("1. [WARNING] thin-content — /post/[id] (2 pages, e.g. https://example.com/post/1, https://example.com/post/2)");
+    expect(report).not.toContain("2. [WARNING]");
   });
 
   it("falls back to N/A when there is no overall score yet", () => {

@@ -3,6 +3,7 @@ import type { AuditCategory, AuditSeverity } from "@/domain/auditing/entities/au
 import type { FixCandidate } from "@/domain/fixes/entities/fix-candidate";
 import { prioritizeIssues, type PriorityTier } from "@/domain/fixes/services/issue-prioritizer";
 import { calculateTrafficImpact, type TrafficImpactTier } from "@/domain/fixes/services/traffic-impact-calculator";
+import { deriveRouteTemplates } from "@/domain/auditing/services/route-template";
 import type { PagePerformance } from "@/domain/tracking/entities/page-performance";
 
 export interface AuditIssuePriorityDto {
@@ -21,6 +22,8 @@ export interface AuditIssueTrafficImpactDto {
 export interface AuditIssueDto {
   id: string;
   pageId: string;
+  pageUrl: string | null;
+  routeTemplate: string | null;
   ruleId: string;
   category: AuditCategory;
   severity: AuditSeverity;
@@ -58,6 +61,11 @@ export function toAuditRunDto(
   const priorityByIssueId = new Map(priorities.map((priority) => [priority.issueId, priority]));
   const trafficImpacts = calculateTrafficImpact(auditRun.issues, pageUrlsByPageId, pagePerformance);
   const trafficImpactByIssueId = new Map(trafficImpacts.map((impact) => [impact.issueId, impact]));
+  // Derived from every crawled page's URL (not just the ones with issues)
+  // so a template stays consistent even if only some of its instances have
+  // findings — e.g. /post/[id] should read the same whether 3 or 12 posts
+  // happen to have issues this run.
+  const routeTemplatesByUrl = deriveRouteTemplates([...pageUrlsByPageId.values()]);
   // prioritizeIssues already returns issues ranked best-to-act-on-first —
   // sort the audit issues themselves into that same order so the API
   // (and the dashboard reading it) doesn't have to re-derive it.
@@ -77,9 +85,12 @@ export function toAuditRunDto(
     issues: sortedIssues.map((issue) => {
       const priority = priorityByIssueId.get(issue.id);
       const trafficImpact = trafficImpactByIssueId.get(issue.id);
+      const pageUrl = pageUrlsByPageId.get(issue.pageId) ?? null;
       return {
         id: issue.id,
         pageId: issue.pageId,
+        pageUrl,
+        routeTemplate: pageUrl ? (routeTemplatesByUrl.get(pageUrl) ?? null) : null,
         ruleId: issue.ruleId,
         category: issue.category,
         severity: issue.severity,
