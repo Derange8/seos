@@ -123,4 +123,19 @@ describe("OpenAiAiVisibilityModel", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [] }), { status: 200 })));
     await expect(new OpenAiAiVisibilityModel({ apiKey: "k" }).ask("q")).rejects.toThrow(/message content/);
   });
+
+  it("aborts and throws a timeout error when the request hangs past timeoutMs", async () => {
+    // fetch never resolves on its own — only the injected timeout's abort ends it.
+    const hangingFetch = vi.fn().mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_, reject) => {
+          init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        })
+    );
+    vi.stubGlobal("fetch", hangingFetch);
+    const model = new OpenAiAiVisibilityModel({ apiKey: "k", timeoutMs: 10 });
+
+    await expect(model.ask("q")).rejects.toThrow(/timed out after 10ms/);
+    expect((hangingFetch.mock.calls[0] as [string, RequestInit])[1].signal).toBeInstanceOf(AbortSignal);
+  });
 });

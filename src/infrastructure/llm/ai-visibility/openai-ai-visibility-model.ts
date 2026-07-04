@@ -12,6 +12,10 @@ import { CITATION_SYSTEM, buildCitationUserPrompt, parseCitationDraft } from "@/
 
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_MODEL = "gpt-4o-mini";
+// LLM calls legitimately run longer than a page fetch (JSON-mode generation,
+// long citation drafts), so this is generous — but bounded, so a hung
+// connection aborts instead of freezing the whole probe forever.
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 const JUDGE_SYSTEM = 'You are a strict classifier. Answer with only "yes" or "no".';
 
@@ -30,6 +34,7 @@ interface Options {
   // DeepSeek reuses this class via its OpenAI-compatible endpoint, exactly
   // like OpenAiRecommendationProvider.
   baseUrl?: string;
+  timeoutMs?: number;
 }
 
 // AiVisibilityModelPort over OpenAI Chat Completions. `ask` uses a warm
@@ -40,11 +45,13 @@ export class OpenAiAiVisibilityModel implements AiVisibilityModelPort {
   private readonly apiKey: string;
   private readonly model: string;
   private readonly apiUrl: string;
+  private readonly timeoutMs: number;
 
   constructor(options: Options) {
     this.apiKey = options.apiKey;
     this.model = options.model ?? DEFAULT_MODEL;
     this.apiUrl = options.baseUrl ?? OPENAI_API_URL;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   async ask(query: string): Promise<string> {
@@ -103,16 +110,29 @@ export class OpenAiAiVisibilityModel implements AiVisibilityModelPort {
     temperature: number,
     jsonMode = false
   ): Promise<string> {
-    const response = await fetch(this.apiUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${this.apiKey}` },
-      body: JSON.stringify({
-        model: this.model,
-        messages,
-        temperature,
-        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    let response: Response;
+    try {
+      response = await fetch(this.apiUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${this.apiKey}` },
+        body: JSON.stringify({
+          model: this.model,
+          messages,
+          temperature,
+          ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new Error(`AI visibility model request timed out after ${this.timeoutMs}ms`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");

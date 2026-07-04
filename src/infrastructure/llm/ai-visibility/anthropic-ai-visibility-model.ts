@@ -13,6 +13,10 @@ import { CITATION_SYSTEM, buildCitationUserPrompt, parseCitationDraft } from "@/
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 const DEFAULT_MODEL = "claude-3-5-haiku-latest";
+// Generous but bounded — long citation drafts run a while, but a hung
+// connection must abort rather than freeze the whole probe. Mirrors the
+// OpenAI model's timeout.
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 const JUDGE_SYSTEM = 'You are a strict classifier. Answer with only "yes" or "no".';
 
@@ -28,6 +32,7 @@ function judgePrompt(answer: string): string {
 interface Options {
   apiKey: string;
   model?: string;
+  timeoutMs?: number;
 }
 
 // AiVisibilityModelPort over Anthropic Messages API — same request/response
@@ -36,10 +41,12 @@ interface Options {
 export class AnthropicAiVisibilityModel implements AiVisibilityModelPort {
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly timeoutMs: number;
 
   constructor(options: Options) {
     this.apiKey = options.apiKey;
     this.model = options.model ?? DEFAULT_MODEL;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   async ask(query: string): Promise<string> {
@@ -74,21 +81,34 @@ export class AnthropicAiVisibilityModel implements AiVisibilityModelPort {
     maxTokens: number,
     temperature: number
   ): Promise<string> {
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": this.apiKey,
-        "anthropic-version": ANTHROPIC_VERSION,
-      },
-      body: JSON.stringify({
-        model: this.model,
-        max_tokens: maxTokens,
-        temperature,
-        ...(system ? { system } : {}),
-        messages: [{ role: "user", content: userContent }],
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    let response: Response;
+    try {
+      response = await fetch(ANTHROPIC_API_URL, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": this.apiKey,
+          "anthropic-version": ANTHROPIC_VERSION,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: maxTokens,
+          temperature,
+          ...(system ? { system } : {}),
+          messages: [{ role: "user", content: userContent }],
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new Error(`AI visibility model request timed out after ${this.timeoutMs}ms`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
