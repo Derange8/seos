@@ -78,6 +78,21 @@ export interface PageAttributes {
   // ParsedPageContent.externalScriptOrigins). Feeds the csp-blocks-script
   // rule, paired with cspHeader.
   externalScriptOrigins?: readonly string[];
+  // wordCount from the plain HTTP-fetched HTML, captured separately from
+  // the (possibly Playwright-rendered) wordCount above — only populated
+  // when CrawlConfig.deepCsrCheck is on (see ProcessPageTaskUseCase). Null
+  // means "not measured this crawl", not "zero raw content". Feeds
+  // client-side-only-content-rule, paired with wordCount as the rendered
+  // side of the comparison.
+  rawWordCount?: number | null;
+  // Whether this page's real content only exists after client-side JS
+  // executes — i.e. rawWordCount is near-empty while the rendered
+  // wordCount is substantial (see ProcessPageTaskUseCase for the actual
+  // threshold/ratio). Distinct from thin-content: thin-content means the
+  // page genuinely has little content; this means Googlebot may see
+  // little content even though a browser sees plenty. Always false when
+  // rawWordCount wasn't measured (deepCsrCheck off).
+  isClientSideOnlyContent?: boolean;
 }
 
 export interface PageProps extends Required<PageAttributes> {
@@ -121,6 +136,8 @@ export class Page {
       isOrphan: attributes.isOrphan ?? false,
       cspHeader: attributes.cspHeader ?? null,
       externalScriptOrigins: attributes.externalScriptOrigins ?? [],
+      rawWordCount: attributes.rawWordCount ?? null,
+      isClientSideOnlyContent: attributes.isClientSideOnlyContent ?? false,
     });
   }
 
@@ -247,6 +264,14 @@ export class Page {
 
   get externalScriptOrigins(): readonly string[] {
     return this.props.externalScriptOrigins;
+  }
+
+  get rawWordCount(): number | null {
+    return this.props.rawWordCount;
+  }
+
+  get isClientSideOnlyContent(): boolean {
+    return this.props.isClientSideOnlyContent;
   }
 
   // Same rationale as setDuplicateFlags: recomputed wholesale on every

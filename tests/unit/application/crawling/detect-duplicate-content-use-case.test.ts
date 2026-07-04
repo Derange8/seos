@@ -134,6 +134,55 @@ describe("DetectDuplicateContentUseCase", () => {
     expect(b.hasDuplicateContent).toBe(false);
   });
 
+  it("does not flag a page as duplicate-title/description/content when it canonicalizes to a different URL", async () => {
+    const pageRepository = new FakePageRepository();
+    const a = Page.create("job-1", url("https://example.com/"), {
+      title: "Same Title",
+      metaDescription: "Same description",
+      contentHash: "hash-x",
+      wordCount: 50,
+    });
+    const b = Page.create("job-1", url("https://example.com/?tab=live"), {
+      title: "Same Title",
+      metaDescription: "Same description",
+      contentHash: "hash-x",
+      wordCount: 50,
+      canonicalUrl: "https://example.com/",
+    });
+    await pageRepository.save("project-1", a);
+    await pageRepository.save("project-1", b);
+
+    const useCase = new DetectDuplicateContentUseCase({ pageRepository });
+    await useCase.execute("project-1", "job-1");
+
+    expect(b.hasDuplicateTitle).toBe(false);
+    expect(b.hasDuplicateMetaDescription).toBe(false);
+    expect(b.hasDuplicateContent).toBe(false);
+    // The canonical target itself is still the "real" page — nothing else
+    // points away from it, so it's still eligible to be flagged if some
+    // other, non-canonicalizing page also shared its title/content. Here
+    // only b canonicalizes away, and a has no other duplicate, so a is
+    // clean too.
+    expect(a.hasDuplicateTitle).toBe(false);
+  });
+
+  it("still flags a page as duplicate when another page shares its content but does not canonicalize away", async () => {
+    const pageRepository = new FakePageRepository();
+    const a = Page.create("job-1", url("https://example.com/a"), { title: "Same Title" });
+    const b = Page.create("job-1", url("https://example.com/b"), {
+      title: "Same Title",
+      canonicalUrl: "https://example.com/b",
+    });
+    await pageRepository.save("project-1", a);
+    await pageRepository.save("project-1", b);
+
+    const useCase = new DetectDuplicateContentUseCase({ pageRepository });
+    await useCase.execute("project-1", "job-1");
+
+    expect(a.hasDuplicateTitle).toBe(true);
+    expect(b.hasDuplicateTitle).toBe(true);
+  });
+
   it("does not flag pages with different content", async () => {
     const pageRepository = new FakePageRepository();
     const a = Page.create("job-1", url("https://example.com/a"), { contentHash: "hash-x", wordCount: 50 });

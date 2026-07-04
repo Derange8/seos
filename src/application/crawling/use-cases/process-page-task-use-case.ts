@@ -36,6 +36,21 @@ const DEFAULT_MIN_INTERVAL_MS = 500;
 // it doesn't remove it.
 const MAX_CRAWL_DELAY_SECONDS = 60;
 
+// A page only counts as client-side-only content when the raw fetch is
+// genuinely near-empty (a real but modest server-rendered word count isn't
+// this problem) AND the rendered version is substantially larger — both
+// conditions guard against flagging normal pages where the two counts
+// differ by a little for unrelated reasons (ads, cookie banners, A/B
+// tests adding a sentence).
+const RAW_NEAR_EMPTY_THRESHOLD = 50;
+const RENDERED_MULTIPLE_THRESHOLD = 3;
+
+function isClientSideOnly(rawWordCount: number, renderedWordCount: number): boolean {
+  if (rawWordCount >= RAW_NEAR_EMPTY_THRESHOLD) return false;
+  if (renderedWordCount === 0) return false;
+  return renderedWordCount >= rawWordCount * RENDERED_MULTIPLE_THRESHOLD && renderedWordCount - rawWordCount >= 100;
+}
+
 // One PageTask end-to-end: fetch -> (maybe render) -> parse -> persist ->
 // enqueue newly discovered internal links. Crawler Engine design §4/§6.
 export class ProcessPageTaskUseCase {
@@ -84,11 +99,14 @@ export class ProcessPageTaskUseCase {
       return;
     }
 
+    const rawHtml = httpResult.value.html;
     let fetched = httpResult.value;
-    if (needsRendering(fetched.html)) {
+    let rendered = false;
+    if (needsRendering(rawHtml)) {
       const renderResult = await renderer.render(task.url);
       if (renderResult.ok) {
         fetched = renderResult.value;
+        rendered = true;
       } else {
         logger.warn("Render fallback failed, keeping the HTTP-fetched result", {
           url: task.url.href,
@@ -97,7 +115,40 @@ export class ProcessPageTaskUseCase {
       }
     }
 
+    // Opt-in (CrawlConfig.deepCsrCheck): even when the cheap heuristic above
+    // didn't flag this page as JS-dependent, render it anyway to check
+    // whether a browser sees meaningfully more content than Googlebot's
+    // plain HTML fetch would — e.g. a Next.js page that isn't a bare SPA
+    // shell (so needsRendering's pattern never matches) but still fetches
+    // its real content client-side via useEffect after the initial paint.
+    // Skipped when the heuristic already rendered above — parsed.wordCount
+    // below already IS the rendered side of the comparison, no second render.
+    let rawWordCount: number | null = null;
+    let renderedWordCount: number | null = null;
+    if (crawlJob.config.deepCsrCheck) {
+      rawWordCount = htmlParser.parse(rawHtml, task.url).wordCount;
+
+      if (!rendered) {
+        const renderResult = await renderer.render(task.url);
+        if (renderResult.ok) {
+          renderedWordCount = htmlParser.parse(renderResult.value.html, renderResult.value.finalUrl).wordCount;
+        } else {
+          logger.warn("Deep CSR check render failed, skipping comparison for this page", {
+            url: task.url.href,
+            code: renderResult.error.code,
+          });
+        }
+      }
+    }
+
     const parsed = htmlParser.parse(fetched.html, fetched.finalUrl);
+    if (crawlJob.config.deepCsrCheck && rendered) {
+      renderedWordCount = parsed.wordCount;
+    }
+    const isClientSideOnlyContent =
+      rawWordCount !== null && renderedWordCount !== null
+        ? isClientSideOnly(rawWordCount, renderedWordCount)
+        : false;
 
     const page = Page.create(crawlJob.id, fetched.finalUrl, {
       statusCode: fetched.statusCode,
@@ -119,6 +170,8 @@ export class ProcessPageTaskUseCase {
       isNoindex: parsed.isNoindex,
       cspHeader: fetched.cspHeader,
       externalScriptOrigins: parsed.externalScriptOrigins,
+      rawWordCount,
+      isClientSideOnlyContent,
     });
 
     const discoveredTasks: PageTask[] = [];

@@ -21,6 +21,7 @@ import { multipleCanonicalRule } from "@/domain/auditing/services/rules/multiple
 import { noindexRule } from "@/domain/auditing/services/rules/noindex-rule";
 import { orphanPageRule } from "@/domain/auditing/services/rules/orphan-page-rule";
 import { cspBlocksScriptRule } from "@/domain/auditing/services/rules/csp-blocks-script-rule";
+import { clientSideOnlyContentRule } from "@/domain/auditing/services/rules/client-side-only-content-rule";
 
 // The plugin registry — adding a rule means writing one AuditRule and
 // listing it here, nothing else in the engine needs to change.
@@ -47,4 +48,5 @@ export const DEFAULT_AUDIT_RULES: readonly AuditRule[] = [
   noindexRule,
   orphanPageRule,
   cspBlocksScriptRule,
+  clientSideOnlyContentRule,
 ];

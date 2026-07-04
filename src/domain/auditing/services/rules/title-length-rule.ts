@@ -31,7 +31,7 @@ export const titleLengthRule: AuditRule = {
           ruleId: "title-length",
           category: "content",
           severity: "WARNING",
-          message: `${page.url.href} title is ${title.length} characters (recommended: ${MIN_LENGTH}-${MAX_LENGTH})`,
+          message: `${page.url.href} title is ${title.length} characters (estimated rendered width: ${width}, recommended: ${MIN_LENGTH}-${MAX_LENGTH})`,
         },
       ];
     }
@@ -41,7 +41,7 @@ export const titleLengthRule: AuditRule = {
           ruleId: "title-length",
           category: "content",
           severity: "WARNING",
-          message: `${page.url.href} title is ${title.length} characters and may be truncated in search results (recommended: ${MIN_LENGTH}-${MAX_LENGTH})`,
+          message: `${page.url.href} title is ${title.length} characters (estimated rendered width: ${width}) and may be truncated in search results (recommended: ${MIN_LENGTH}-${MAX_LENGTH})`,
         },
       ];
     }

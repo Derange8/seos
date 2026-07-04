@@ -135,6 +135,15 @@ model Page {
   // JSON array of origin strings. Feeds the csp-blocks-script audit rule,
   // paired with cspHeader.
   externalScriptOrigins       Json           @default("[]")
+  // wordCount from the plain HTTP-fetched HTML, captured separately from
+  // the (possibly Playwright-rendered) wordCount above — only populated
+  // when CrawlConfig.deepCsrCheck is on. Null means "not measured this
+  // crawl". Feeds client-side-only-content-rule.
+  rawWordCount                Int?
+  // Whether this page's real content only exists after client-side JS
+  // executes (rawWordCount near-empty, rendered wordCount substantial) —
+  // feeds client-side-only-content-rule.
+  isClientSideOnlyContent     Boolean        @default(false)
   links                       Link[]
   auditIssues                 AuditIssue[]
   schemaMarkups               SchemaMarkup[]

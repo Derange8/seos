@@ -26,7 +26,7 @@ export const metaDescriptionLengthRule: AuditRule = {
           ruleId: "meta-description-length",
           category: "content",
           severity: "INFO",
-          message: `${page.url.href} meta description is ${description.length} characters (recommended: ${MIN_LENGTH}-${MAX_LENGTH})`,
+          message: `${page.url.href} meta description is ${description.length} characters (estimated rendered width: ${width}, recommended: ${MIN_LENGTH}-${MAX_LENGTH})`,
         },
       ];
     }

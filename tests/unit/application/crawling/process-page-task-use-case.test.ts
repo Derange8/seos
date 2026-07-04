@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ProcessPageTaskUseCase } from "@/application/crawling/use-cases/process-page-task-use-case";
+import type { PageRendererPort } from "@/application/crawling/ports/page-renderer-port";
 import { CrawlJob } from "@/domain/crawling/entities/crawl-job";
 import { CrawlConfig } from "@/domain/crawling/value-objects/crawl-config";
 import { Url } from "@/domain/crawling/value-objects/url";
@@ -14,6 +15,7 @@ import {
   FakePageRepository,
   FakeRateLimiter,
   FakeRobotsPort,
+  HtmlKeyedFakeHtmlParser,
   SilentLogger,
   emptyParsedContent,
   fetchErr,
@@ -26,13 +28,17 @@ function url(input: string): Url {
   return result.value;
 }
 
-function config(overrides: Partial<{ maxDepth: number; maxPages: number; respectRobots: boolean }> = {}): CrawlConfig {
+function config(
+  overrides: Partial<{ maxDepth: number; maxPages: number; respectRobots: boolean; deepCsrCheck: boolean }> = {}
+): CrawlConfig {
   const result = CrawlConfig.create(overrides);
   if (!result.ok) throw new Error("expected ok result");
   return result.value;
 }
 
-function runningJob(overrides: Partial<{ maxDepth: number; maxPages: number; respectRobots: boolean }> = {}): CrawlJob {
+function runningJob(
+  overrides: Partial<{ maxDepth: number; maxPages: number; respectRobots: boolean; deepCsrCheck: boolean }> = {}
+): CrawlJob {
   const job = CrawlJob.create("project-1", config(overrides));
   job.start();
   return job;
@@ -349,6 +355,149 @@ describe("ProcessPageTaskUseCase", () => {
 
     expect(pageRepository.saved).toHaveLength(1);
     expect(pageRepository.saved[0]?.page.title).toBe("Rendered Title");
+  });
+
+  it("does not measure rawWordCount/isClientSideOnlyContent when deepCsrCheck is off", async () => {
+    const crawlJobRepository = new FakeCrawlJobRepository();
+    const job = runningJob({ deepCsrCheck: false });
+    crawlJobRepository.seed(job);
+    const pageRepository = new FakePageRepository();
+
+    const useCase = new ProcessPageTaskUseCase({
+      fetcher: new FakePageFetcher(fetchOk({ statusCode: 200, html: "<html><body>hi</body></html>" }, url("https://example.com/"))),
+      renderer: new FakePageRenderer(fetchErr("TIMEOUT")),
+      htmlParser: new FakeHtmlParser(emptyParsedContent({ wordCount: 3 })),
+      crawlJobRepository,
+      pageRepository,
+      queue: new FakeCrawlQueuePort(),
+      robots: new FakeRobotsPort(),
+      rateLimiter: new FakeRateLimiter(),
+      logger: new SilentLogger(),
+    });
+
+    await useCase.execute(task(job.id));
+
+    expect(pageRepository.saved[0]?.page.rawWordCount).toBeNull();
+    expect(pageRepository.saved[0]?.page.isClientSideOnlyContent).toBe(false);
+  });
+
+  it("flags client-side-only content when deepCsrCheck is on and the rendered page has far more content than the raw fetch", async () => {
+    const crawlJobRepository = new FakeCrawlJobRepository();
+    const job = runningJob({ deepCsrCheck: true });
+    crawlJobRepository.seed(job);
+    const pageRepository = new FakePageRepository();
+
+    const rawHtml = "<html><body>shell</body></html>";
+    const renderedHtml = "<html><body>fully rendered content</body></html>";
+
+    const useCase = new ProcessPageTaskUseCase({
+      // Not SPA-shell/near-empty enough to trip needsRendering on its own —
+      // the deepCsrCheck path is what has to trigger the extra render here.
+      fetcher: new FakePageFetcher(
+        fetchOk({ statusCode: 200, html: rawHtml }, url("https://example.com/"))
+      ),
+      renderer: new FakePageRenderer(
+        fetchOk({ statusCode: 200, html: renderedHtml, renderMode: "PLAYWRIGHT" }, url("https://example.com/"))
+      ),
+      htmlParser: new HtmlKeyedFakeHtmlParser(
+        new Map([
+          [rawHtml, emptyParsedContent({ wordCount: 5 })],
+          [renderedHtml, emptyParsedContent({ wordCount: 400 })],
+        ]),
+        emptyParsedContent()
+      ),
+      crawlJobRepository,
+      pageRepository,
+      queue: new FakeCrawlQueuePort(),
+      robots: new FakeRobotsPort(),
+      rateLimiter: new FakeRateLimiter(),
+      logger: new SilentLogger(),
+    });
+
+    await useCase.execute(task(job.id));
+
+    expect(pageRepository.saved[0]?.page.rawWordCount).toBe(5);
+    expect(pageRepository.saved[0]?.page.isClientSideOnlyContent).toBe(true);
+    // The persisted page still reflects the plain HTTP fetch (never
+    // rendered by needsRendering) — deepCsrCheck's render is purely a
+    // side comparison, it doesn't change which fetch result gets parsed
+    // and saved.
+    expect(pageRepository.saved[0]?.page.wordCount).toBe(5);
+  });
+
+  it("does not flag client-side-only content when deepCsrCheck is on but raw and rendered word counts are close", async () => {
+    const crawlJobRepository = new FakeCrawlJobRepository();
+    const job = runningJob({ deepCsrCheck: true });
+    crawlJobRepository.seed(job);
+    const pageRepository = new FakePageRepository();
+
+    const rawHtml = "<html><body>a normal server-rendered page with real content</body></html>";
+    const renderedHtml = "<html><body>a normal server-rendered page with real content plus a bit more</body></html>";
+
+    const useCase = new ProcessPageTaskUseCase({
+      fetcher: new FakePageFetcher(fetchOk({ statusCode: 200, html: rawHtml }, url("https://example.com/"))),
+      renderer: new FakePageRenderer(
+        fetchOk({ statusCode: 200, html: renderedHtml, renderMode: "PLAYWRIGHT" }, url("https://example.com/"))
+      ),
+      htmlParser: new HtmlKeyedFakeHtmlParser(
+        new Map([
+          [rawHtml, emptyParsedContent({ wordCount: 300 })],
+          [renderedHtml, emptyParsedContent({ wordCount: 310 })],
+        ]),
+        emptyParsedContent()
+      ),
+      crawlJobRepository,
+      pageRepository,
+      queue: new FakeCrawlQueuePort(),
+      robots: new FakeRobotsPort(),
+      rateLimiter: new FakeRateLimiter(),
+      logger: new SilentLogger(),
+    });
+
+    await useCase.execute(task(job.id));
+
+    expect(pageRepository.saved[0]?.page.isClientSideOnlyContent).toBe(false);
+  });
+
+  it("reuses the heuristic's own render for the deepCsrCheck comparison instead of rendering twice", async () => {
+    const crawlJobRepository = new FakeCrawlJobRepository();
+    const job = runningJob({ deepCsrCheck: true });
+    crawlJobRepository.seed(job);
+    const pageRepository = new FakePageRepository();
+
+    const rawHtml = '<html><body><div id="root"></div></body></html>'; // trips needsRendering itself
+    const renderedHtml = "<html><body>fully rendered content after SPA boot</body></html>";
+    let renderCalls = 0;
+
+    const renderer: PageRendererPort = {
+      async render() {
+        renderCalls += 1;
+        return fetchOk({ statusCode: 200, html: renderedHtml, renderMode: "PLAYWRIGHT" as const }, url("https://example.com/"));
+      },
+    };
+
+    const useCase = new ProcessPageTaskUseCase({
+      fetcher: new FakePageFetcher(fetchOk({ statusCode: 200, html: rawHtml }, url("https://example.com/"))),
+      renderer,
+      htmlParser: new HtmlKeyedFakeHtmlParser(
+        new Map([
+          [rawHtml, emptyParsedContent({ wordCount: 2 })],
+          [renderedHtml, emptyParsedContent({ wordCount: 500 })],
+        ]),
+        emptyParsedContent()
+      ),
+      crawlJobRepository,
+      pageRepository,
+      queue: new FakeCrawlQueuePort(),
+      robots: new FakeRobotsPort(),
+      rateLimiter: new FakeRateLimiter(),
+      logger: new SilentLogger(),
+    });
+
+    await useCase.execute(task(job.id));
+
+    expect(renderCalls).toBe(1);
+    expect(pageRepository.saved[0]?.page.isClientSideOnlyContent).toBe(true);
   });
 
   it("skips a page disallowed by robots.txt when respectRobots is on", async () => {

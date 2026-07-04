@@ -15,11 +15,21 @@ function truncateAtWordBoundary(text: string, maxLength: number): string {
   return (lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated).trim();
 }
 
-// Prefers real page content (contentExcerpt) over fabricating a
-// description from nothing — only falls back to a generic templated line
-// when there's truly no usable text (e.g. a near-empty or JS-only page
-// that failed to render).
+// The page's own <meta name="description"> is the source of truth when
+// it exists (e.g. meta-description-length firing because it's too short/
+// long) — editing what's actually there beats replacing it with scraped
+// body text the tag never contained. Only missing-meta-description (where
+// this is null) falls through to contentExcerpt, and only truly empty
+// pages fall through further to a generic templated line.
 function baseDescription(page: Page): string {
+  const existing = page.metaDescription?.trim();
+  if (existing) {
+    if (existing.length >= META_DESCRIPTION_MIN_LENGTH) return existing;
+    // Real, on-page description, just short of the recommended minimum —
+    // pad rather than discard it.
+    return `${existing} Learn more on ${page.url.hostname}.`;
+  }
+
   const excerpt = page.contentExcerpt?.trim();
   if (!excerpt) {
     const subject = page.h1 ?? page.title ?? "this page";

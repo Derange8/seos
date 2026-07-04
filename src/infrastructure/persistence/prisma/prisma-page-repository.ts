@@ -73,6 +73,8 @@ function toDomain(row: PrismaPageRow & { links: PrismaLinkRow[] }): Page {
     isOrphan: row.isOrphan,
     cspHeader: row.cspHeader,
     externalScriptOrigins: toDomainExternalScriptOrigins(row.externalScriptOrigins),
+    rawWordCount: row.rawWordCount,
+    isClientSideOnlyContent: row.isClientSideOnlyContent,
   };
 
   const links = row.links.map((linkRow) =>
@@ -116,6 +118,8 @@ export class PrismaPageRepository implements PageRepositoryPort {
       isOrphan: page.isOrphan,
       cspHeader: page.cspHeader,
       externalScriptOrigins: page.externalScriptOrigins,
+      rawWordCount: page.rawWordCount,
+      isClientSideOnlyContent: page.isClientSideOnlyContent,
       crawledAt: page.crawledAt,
     };
 

@@ -36,6 +36,26 @@ describe("metaDescriptionFixGenerator", () => {
     expect(candidate?.content).toContain("example.com");
   });
 
+  it("uses the existing meta description over contentExcerpt when both are present", () => {
+    const metaDescription = "B".repeat(90);
+    const page = Page.create("job-1", url("https://example.com/"), {
+      metaDescription,
+      contentExcerpt: "Skip to content Elif Kaya — some scraped body text.",
+    });
+    const candidate = metaDescriptionFixGenerator.generate(page, issue());
+    expect(candidate?.content).toBe(metaDescription);
+  });
+
+  it("pads a short-but-real existing meta description rather than discarding it", () => {
+    const page = Page.create("job-1", url("https://example.com/"), {
+      metaDescription: "Too short.",
+      contentExcerpt: "Skip to content Elif Kaya — some scraped body text.",
+    });
+    const candidate = metaDescriptionFixGenerator.generate(page, issue());
+    expect(candidate?.content).toContain("Too short.");
+    expect(candidate?.content).not.toContain("Skip to content");
+  });
+
   it("falls back to a generic templated line when there is no excerpt at all", () => {
     const page = Page.create("job-1", url("https://example.com/"), { h1: "Our Product" });
     const candidate = metaDescriptionFixGenerator.generate(page, issue());

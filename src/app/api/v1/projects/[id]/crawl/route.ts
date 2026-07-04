@@ -59,6 +59,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (typeof body.maxPages === "number") configOverrides.maxPages = body.maxPages;
   if (typeof body.respectRobots === "boolean") configOverrides.respectRobots = body.respectRobots;
   if (typeof body.concurrency === "number") configOverrides.concurrency = body.concurrency;
+  if (typeof body.deepCsrCheck === "boolean") configOverrides.deepCsrCheck = body.deepCsrCheck;
 
   const useCase = new StartCrawlUseCase({
     crawlJobRepository: new PrismaCrawlJobRepository(prisma),

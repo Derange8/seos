@@ -29,6 +29,18 @@ function findDuplicatedValues(pages: readonly Page[], getValue: (page: Page) => 
   return duplicated;
 }
 
+// A page that declares a canonical URL other than itself is explicitly
+// telling search engines "the other URL is the one that counts, ignore me
+// for ranking/indexing purposes" — e.g. ?tab= query-param variants of the
+// same route all canonicalizing to "/". That's already the resolved state
+// duplicate-title/meta-description/content exist to surface, so such pages
+// are excluded from being flagged (they still count toward another page's
+// duplicate count if that other page does NOT self-canonicalize away).
+function selfCanonicalizes(page: Page): boolean {
+  if (!page.canonicalUrl) return true;
+  return page.canonicalUrl === page.url.href;
+}
+
 // Cross-page comparison — same reason this can't be a plain AuditRule as
 // DetectBrokenLinksUseCase: a single-page rule has no way to know what any
 // *other* page's title/meta description is. Runs once per crawl job,
@@ -40,21 +52,33 @@ export class DetectDuplicateContentUseCase {
 
   async execute(projectId: string, crawlJobId: string): Promise<void> {
     const pages = await this.deps.pageRepository.findAllByCrawlJobId(crawlJobId);
+    // Pages that canonicalize away to a different URL are excluded from the
+    // comparison pool entirely, not just from being flagged themselves —
+    // otherwise the page they point to would still get flagged as a
+    // "duplicate" of a variant it has already resolved via canonical.
+    const comparablePages = pages.filter(selfCanonicalizes);
 
-    const duplicatedTitles = findDuplicatedValues(pages, (page) => page.title);
-    const duplicatedMetaDescriptions = findDuplicatedValues(pages, (page) => page.metaDescription);
+    const duplicatedTitles = findDuplicatedValues(comparablePages, (page) => page.title);
+    const duplicatedMetaDescriptions = findDuplicatedValues(comparablePages, (page) => page.metaDescription);
     // wordCount 0 (no real visible text) is excluded so two empty pages
     // don't count as "duplicate content" — that's thin-content-rule's job.
-    const duplicatedContent = findDuplicatedValues(pages, (page) =>
+    const duplicatedContent = findDuplicatedValues(comparablePages, (page) =>
       page.wordCount && page.wordCount > 0 ? page.contentHash : null
     );
 
     for (const page of pages) {
-      const hasDuplicateTitle = normalize(page.title) !== null && duplicatedTitles.has(normalize(page.title)!);
+      const canonicalizesAway = !selfCanonicalizes(page);
+      const hasDuplicateTitle =
+        !canonicalizesAway && normalize(page.title) !== null && duplicatedTitles.has(normalize(page.title)!);
       const hasDuplicateMetaDescription =
-        normalize(page.metaDescription) !== null && duplicatedMetaDescriptions.has(normalize(page.metaDescription)!);
+        !canonicalizesAway &&
+        normalize(page.metaDescription) !== null &&
+        duplicatedMetaDescriptions.has(normalize(page.metaDescription)!);
       const hasDuplicateContent =
-        !!page.wordCount && page.wordCount > 0 && duplicatedContent.has(normalize(page.contentHash)!);
+        !canonicalizesAway &&
+        !!page.wordCount &&
+        page.wordCount > 0 &&
+        duplicatedContent.has(normalize(page.contentHash)!);
 
       if (
         hasDuplicateTitle === page.hasDuplicateTitle &&

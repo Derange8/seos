@@ -75,6 +75,8 @@ describe("selectSitemapEntries", () => {
         isOrphan: false,
         cspHeader: null,
         externalScriptOrigins: [],
+        rawWordCount: null,
+        isClientSideOnlyContent: false,
       },
       []
     );

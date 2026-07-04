@@ -125,6 +125,21 @@ export class FakeHtmlParser implements HtmlParserPort {
   }
 }
 
+// Unlike FakeHtmlParser (always returns one fixed result), this maps raw
+// html strings to distinct ParsedPageContent — needed to exercise
+// ProcessPageTaskUseCase's deepCsrCheck path, which parses the raw-fetched
+// html and the rendered html separately and compares their word counts.
+export class HtmlKeyedFakeHtmlParser implements HtmlParserPort {
+  constructor(
+    private readonly byHtml: ReadonlyMap<string, ParsedPageContent>,
+    private readonly fallback: ParsedPageContent
+  ) {}
+
+  parse(html: string): ParsedPageContent {
+    return this.byHtml.get(html) ?? this.fallback;
+  }
+}
+
 export class SilentLogger implements Logger {
   debug(_message: string, _context?: LogContext): void {}
   info(_message: string, _context?: LogContext): void {}

@@ -10,6 +10,13 @@ export interface CrawlConfigProps {
   maxPages: number;
   respectRobots: boolean;
   concurrency: number;
+  // Off by default: doubles the fetch cost per page (a raw HTTP fetch AND
+  // a full Playwright render, even for pages the JS-rendering heuristic
+  // wouldn't otherwise escalate) in exchange for detecting content that
+  // only exists after client-side JS runs — see
+  // ProcessPageTaskUseCase/client-side-only-content-rule. A user opts in
+  // knowing that trade-off; it's not worth paying by default on every crawl.
+  deepCsrCheck: boolean;
 }
 
 const DEFAULTS: CrawlConfigProps = {
@@ -17,6 +24,7 @@ const DEFAULTS: CrawlConfigProps = {
   maxPages: 200,
   respectRobots: true,
   concurrency: 2,
+  deepCsrCheck: false,
 };
 
 // Upper bounds, not just lower ones — an API caller could otherwise
@@ -73,6 +81,10 @@ export class CrawlConfig {
 
   get concurrency(): number {
     return this.props.concurrency;
+  }
+
+  get deepCsrCheck(): boolean {
+    return this.props.deepCsrCheck;
   }
 
   toJSON(): CrawlConfigProps {
