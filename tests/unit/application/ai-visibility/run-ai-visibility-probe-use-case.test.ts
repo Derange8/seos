@@ -107,4 +107,77 @@ describe("RunAiVisibilityProbeUseCase", () => {
     expect(runRepository.saved).toHaveLength(1);
     expect(runRepository.saved[0]).toBe(run);
   });
+
+  it("retries a failed sample and still records a full outcome when the retry succeeds", async () => {
+    const model = new FakeModel();
+    // First ask throws, the retry succeeds — the sample must survive.
+    let calls = 0;
+    const original = model.ask.bind(model);
+    model.ask = async (query: string) => {
+      calls++;
+      if (calls === 1) throw new Error("429 rate limited");
+      return original(query);
+    };
+    const runRepository = new FakeRunRepository();
+    const useCase = new RunAiVisibilityProbeUseCase({
+      model,
+      runRepository,
+      samplesPerQuery: 1,
+      retriesPerSample: 1,
+      retryDelayMs: 0,
+    });
+
+    const run = await useCase.execute("project-1", TARGET);
+
+    // All four queries still produce one slot each — nothing was lost.
+    expect(run.outcomes).toHaveLength(4);
+    expect(slotsFor(run, "q-contested")).toHaveLength(1);
+  });
+
+  it("drops a query whose every sample fails, keeps the rest, and saves the partial run", async () => {
+    const model = new FakeModel();
+    const original = model.ask.bind(model);
+    // q-open fails on every attempt; the other three answer normally.
+    model.ask = async (query: string) => {
+      if (query === "q-open") throw new Error("timeout");
+      return original(query);
+    };
+    const runRepository = new FakeRunRepository();
+    const useCase = new RunAiVisibilityProbeUseCase({
+      model,
+      runRepository,
+      samplesPerQuery: 2,
+      retriesPerSample: 1,
+      retryDelayMs: 0,
+    });
+
+    const run = await useCase.execute("project-1", TARGET);
+
+    // q-open is dropped entirely (not recorded as a phantom CONTESTED), the
+    // other three survive, and the partial run is still persisted.
+    expect(run.outcomes.map((o) => o.query).sort()).toEqual([
+      "q-contested",
+      "q-judged-contested",
+      "q-mentioned",
+    ]);
+    expect(runRepository.saved).toHaveLength(1);
+  });
+
+  it("throws and saves nothing when the whole probe measures zero samples", async () => {
+    const model = new FakeModel();
+    model.ask = async () => {
+      throw new Error("provider down");
+    };
+    const runRepository = new FakeRunRepository();
+    const useCase = new RunAiVisibilityProbeUseCase({
+      model,
+      runRepository,
+      samplesPerQuery: 2,
+      retriesPerSample: 0,
+      retryDelayMs: 0,
+    });
+
+    await expect(useCase.execute("project-1", TARGET)).rejects.toThrow("provider down");
+    expect(runRepository.saved).toHaveLength(0);
+  });
 });

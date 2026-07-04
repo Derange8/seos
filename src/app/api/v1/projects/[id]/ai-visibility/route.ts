@@ -81,6 +81,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     model: new DynamicAiVisibilityModel(new PrismaLlmSettingsRepository(prisma), new ConsoleLogger()),
     runRepository,
     samplesPerQuery,
+    logger: new ConsoleLogger(),
   });
 
   try {
