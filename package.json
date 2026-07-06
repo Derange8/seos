@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "main": "dist-electron/main.cjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Derange8/seos.git"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,7 +16,8 @@
     "electron:build-main": "node scripts/build-electron.mjs",
     "electron:dev": "npm run build && npm run electron:build-main && rm -rf node_modules/better-sqlite3/build && electron-rebuild -f -w better-sqlite3 --build-from-source && rm -rf .next/standalone/node_modules/better-sqlite3 && cp -r node_modules/better-sqlite3 .next/standalone/node_modules/better-sqlite3 && electron .",
     "postelectron:dev": "npm rebuild better-sqlite3",
-    "electron:dist": "npm run build && npm run electron:build-main && electron-builder"
+    "electron:dist": "npm run build && npm run electron:build-main && electron-builder",
+    "electron:dist:publish": "npm run build && npm run electron:build-main && electron-builder --publish always"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

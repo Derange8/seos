@@ -25,12 +25,18 @@ asarUnpack:
 npmRebuild: true
 
 # GitHub Releases is what electron-updater (see electron/main.ts) polls for
-# new versions. electron-builder infers owner/repo from package.json's
-# "repository" field if present — add one (or "owner"/"repo" keys here
-# directly) once this points at a real GitHub repo, and set GH_TOKEN when
-# running `npm run electron:dist -- --publish always` to actually upload.
+# new versions. package.json now has a real "repository" field
+# (Derange8/seos) electron-builder could infer this from, but owner/repo
+# are spelled out here too so publishing doesn't silently depend on that
+# field never drifting. Actually uploading requires GH_TOKEN (a PAT with
+# repo/contents:write scope) in the environment and running
+# `npm run electron:dist:publish` (electron-builder's own --publish
+# always flag) — the plain `electron:dist` script never publishes, only
+# builds locally.
 publish:
   provider: github
+  owner: Derange8
+  repo: seos
 
 mac:
   category: public.app-category.developer-tools
