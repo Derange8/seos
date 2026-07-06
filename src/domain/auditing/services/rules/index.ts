@@ -28,6 +28,9 @@ import { robotsBlocksEntireSiteRule } from "@/domain/auditing/services/rules/rob
 import { robotsMissingSitemapDirectiveRule } from "@/domain/auditing/services/rules/robots-missing-sitemap-directive-rule";
 import { sitemapUnreachableRule } from "@/domain/auditing/services/rules/sitemap-unreachable-rule";
 import { sitemapInvalidXmlRule } from "@/domain/auditing/services/rules/sitemap-invalid-xml-rule";
+import { poorLcpRule } from "@/domain/auditing/services/rules/poor-lcp-rule";
+import { poorClsRule } from "@/domain/auditing/services/rules/poor-cls-rule";
+import { poorTbtRule } from "@/domain/auditing/services/rules/poor-tbt-rule";
 
 // The plugin registry — adding a rule means writing one AuditRule and
 // listing it here, nothing else in the engine needs to change.
@@ -61,4 +64,7 @@ export const DEFAULT_AUDIT_RULES: readonly AuditRule[] = [
   robotsMissingSitemapDirectiveRule,
   sitemapUnreachableRule,
   sitemapInvalidXmlRule,
+  poorLcpRule,
+  poorClsRule,
+  poorTbtRule,
 ];

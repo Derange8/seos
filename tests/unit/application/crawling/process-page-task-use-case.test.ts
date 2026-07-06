@@ -5,7 +5,7 @@ import { CrawlJob } from "@/domain/crawling/entities/crawl-job";
 import { CrawlConfig } from "@/domain/crawling/value-objects/crawl-config";
 import { Url } from "@/domain/crawling/value-objects/url";
 import type { PageTask } from "@/application/crawling/ports/crawl-queue-port";
-import { ok } from "@/shared/result";
+import { ok, err } from "@/shared/result";
 import {
   FakeCrawlJobRepository,
   FakeCrawlQueuePort,
@@ -15,12 +15,14 @@ import {
   FakePageRepository,
   FakeRateLimiter,
   FakeRobotsPort,
+  FakeWebVitalsPort,
   HtmlKeyedFakeHtmlParser,
   SilentLogger,
   emptyParsedContent,
   fetchErr,
   fetchOk,
 } from "./fakes";
+import { PageFetchError } from "@/application/crawling/ports/page-fetch-result";
 
 function url(input: string): Url {
   const result = Url.create(input);
@@ -29,7 +31,7 @@ function url(input: string): Url {
 }
 
 function config(
-  overrides: Partial<{ maxDepth: number; maxPages: number; respectRobots: boolean; deepCsrCheck: boolean }> = {}
+  overrides: Partial<{ maxDepth: number; maxPages: number; respectRobots: boolean; deepCsrCheck: boolean; measureWebVitals: boolean }> = {}
 ): CrawlConfig {
   const result = CrawlConfig.create(overrides);
   if (!result.ok) throw new Error("expected ok result");
@@ -37,7 +39,7 @@ function config(
 }
 
 function runningJob(
-  overrides: Partial<{ maxDepth: number; maxPages: number; respectRobots: boolean; deepCsrCheck: boolean }> = {}
+  overrides: Partial<{ maxDepth: number; maxPages: number; respectRobots: boolean; deepCsrCheck: boolean; measureWebVitals: boolean }> = {}
 ): CrawlJob {
   const job = CrawlJob.create("project-1", config(overrides));
   job.start();
@@ -648,5 +650,115 @@ describe("ProcessPageTaskUseCase", () => {
     await useCase.execute(task(job.id, { url: url("https://example.com/b") }));
 
     expect(robots.fetchCount).toBe(1);
+  });
+
+  it("does not measure web vitals when measureWebVitals is off", async () => {
+    const crawlJobRepository = new FakeCrawlJobRepository();
+    const job = runningJob({ measureWebVitals: false });
+    crawlJobRepository.seed(job);
+    const pageRepository = new FakePageRepository();
+    const webVitals = new FakeWebVitalsPort();
+
+    const useCase = new ProcessPageTaskUseCase({
+      fetcher: new FakePageFetcher(fetchOk({}, url("https://example.com/"))),
+      renderer: new FakePageRenderer(fetchErr("TIMEOUT")),
+      htmlParser: new FakeHtmlParser(emptyParsedContent()),
+      crawlJobRepository,
+      pageRepository,
+      queue: new FakeCrawlQueuePort(),
+      robots: new FakeRobotsPort(),
+      rateLimiter: new FakeRateLimiter(),
+      logger: new SilentLogger(),
+      webVitals,
+    });
+
+    await useCase.execute(task(job.id));
+
+    expect(webVitals.measureCalls).toHaveLength(0);
+    const saved = pageRepository.saved[0]?.page;
+    expect(saved?.lcpMs).toBeNull();
+    expect(saved?.cls).toBeNull();
+    expect(saved?.tbtMs).toBeNull();
+  });
+
+  it("measures and persists web vitals when measureWebVitals is on", async () => {
+    const crawlJobRepository = new FakeCrawlJobRepository();
+    const job = runningJob({ measureWebVitals: true });
+    crawlJobRepository.seed(job);
+    const pageRepository = new FakePageRepository();
+    const webVitals = new FakeWebVitalsPort(ok({ lcpMs: 3200, cls: 0.15, tbtMs: 420 }));
+
+    const useCase = new ProcessPageTaskUseCase({
+      fetcher: new FakePageFetcher(fetchOk({}, url("https://example.com/"))),
+      renderer: new FakePageRenderer(fetchErr("TIMEOUT")),
+      htmlParser: new FakeHtmlParser(emptyParsedContent()),
+      crawlJobRepository,
+      pageRepository,
+      queue: new FakeCrawlQueuePort(),
+      robots: new FakeRobotsPort(),
+      rateLimiter: new FakeRateLimiter(),
+      logger: new SilentLogger(),
+      webVitals,
+    });
+
+    await useCase.execute(task(job.id));
+
+    expect(webVitals.measureCalls).toHaveLength(1);
+    const saved = pageRepository.saved[0]?.page;
+    expect(saved?.lcpMs).toBe(3200);
+    expect(saved?.cls).toBe(0.15);
+    expect(saved?.tbtMs).toBe(420);
+  });
+
+  it("leaves web vitals null when measureWebVitals is on but measurement fails", async () => {
+    const crawlJobRepository = new FakeCrawlJobRepository();
+    const job = runningJob({ measureWebVitals: true });
+    crawlJobRepository.seed(job);
+    const pageRepository = new FakePageRepository();
+    const webVitals = new FakeWebVitalsPort(err(new PageFetchError("TIMEOUT", "timed out")));
+
+    const useCase = new ProcessPageTaskUseCase({
+      fetcher: new FakePageFetcher(fetchOk({}, url("https://example.com/"))),
+      renderer: new FakePageRenderer(fetchErr("TIMEOUT")),
+      htmlParser: new FakeHtmlParser(emptyParsedContent()),
+      crawlJobRepository,
+      pageRepository,
+      queue: new FakeCrawlQueuePort(),
+      robots: new FakeRobotsPort(),
+      rateLimiter: new FakeRateLimiter(),
+      logger: new SilentLogger(),
+      webVitals,
+    });
+
+    await useCase.execute(task(job.id));
+
+    const saved = pageRepository.saved[0]?.page;
+    expect(saved?.lcpMs).toBeNull();
+    expect(saved?.cls).toBeNull();
+    expect(saved?.tbtMs).toBeNull();
+  });
+
+  it("does not measure web vitals when measureWebVitals is on but no webVitals port was supplied", async () => {
+    const crawlJobRepository = new FakeCrawlJobRepository();
+    const job = runningJob({ measureWebVitals: true });
+    crawlJobRepository.seed(job);
+    const pageRepository = new FakePageRepository();
+
+    const useCase = new ProcessPageTaskUseCase({
+      fetcher: new FakePageFetcher(fetchOk({}, url("https://example.com/"))),
+      renderer: new FakePageRenderer(fetchErr("TIMEOUT")),
+      htmlParser: new FakeHtmlParser(emptyParsedContent()),
+      crawlJobRepository,
+      pageRepository,
+      queue: new FakeCrawlQueuePort(),
+      robots: new FakeRobotsPort(),
+      rateLimiter: new FakeRateLimiter(),
+      logger: new SilentLogger(),
+    });
+
+    await useCase.execute(task(job.id));
+
+    const saved = pageRepository.saved[0]?.page;
+    expect(saved?.lcpMs).toBeNull();
   });
 });

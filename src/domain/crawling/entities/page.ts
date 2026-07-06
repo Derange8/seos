@@ -123,6 +123,16 @@ export interface PageAttributes {
   // (sitemapIsUnreachable already covers that case). Feeds the
   // sitemap-invalid-xml rule.
   sitemapIsInvalidXml?: boolean | null;
+  // Core Web Vitals, captured by PlaywrightWebVitalsMeasurer when
+  // CrawlConfig.measureWebVitals is on. Null means "not measured this
+  // crawl" (the flag was off), not "zero/perfect". Feeds poor-lcp/
+  // poor-cls/poor-tbt rules.
+  lcpMs?: number | null;
+  cls?: number | null;
+  // Total Blocking Time — the lab-measurable proxy for INP (see
+  // WebVitalsMeasurement.tbtMs for why INP itself isn't measurable from an
+  // unattended crawl).
+  tbtMs?: number | null;
 }
 
 export interface PageProps extends Required<PageAttributes> {
@@ -174,6 +184,9 @@ export class Page {
       robotsMissingSitemapDirective: attributes.robotsMissingSitemapDirective ?? null,
       sitemapIsUnreachable: attributes.sitemapIsUnreachable ?? false,
       sitemapIsInvalidXml: attributes.sitemapIsInvalidXml ?? null,
+      lcpMs: attributes.lcpMs ?? null,
+      cls: attributes.cls ?? null,
+      tbtMs: attributes.tbtMs ?? null,
     });
   }
 
@@ -332,6 +345,18 @@ export class Page {
 
   get sitemapIsInvalidXml(): boolean | null {
     return this.props.sitemapIsInvalidXml;
+  }
+
+  get lcpMs(): number | null {
+    return this.props.lcpMs;
+  }
+
+  get cls(): number | null {
+    return this.props.cls;
+  }
+
+  get tbtMs(): number | null {
+    return this.props.tbtMs;
   }
 
   // Recomputed wholesale on every AuditRobotsAndSitemapUseCase run, same

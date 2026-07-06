@@ -6,6 +6,7 @@ import type { PageRendererPort } from "@/application/crawling/ports/page-rendere
 import type { HtmlParserPort, ParsedPageContent } from "@/application/crawling/ports/html-parser-port";
 import { PageFetchError, type PageFetchResult } from "@/application/crawling/ports/page-fetch-result";
 import type { RobotsPort } from "@/application/crawling/ports/robots-port";
+import type { WebVitalsPort, WebVitalsMeasurement } from "@/application/crawling/ports/web-vitals-port";
 import type { RateLimiterPort } from "@/application/crawling/ports/rate-limiter-port";
 import type { Url } from "@/domain/crawling/value-objects/url";
 import type { CrawlJob } from "@/domain/crawling/entities/crawl-job";
@@ -198,6 +199,19 @@ export class FakeRobotsPort implements RobotsPort {
 
   async fetchRobotsTxt(_origin: Url): Promise<Result<string | null, PageFetchError>> {
     this.fetchCount++;
+    return this.result;
+  }
+}
+
+export class FakeWebVitalsPort implements WebVitalsPort {
+  measureCalls: Url[] = [];
+
+  constructor(
+    private readonly result: Result<WebVitalsMeasurement, PageFetchError> = ok({ lcpMs: 1000, cls: 0, tbtMs: 0 })
+  ) {}
+
+  async measure(url: Url): Promise<Result<WebVitalsMeasurement, PageFetchError>> {
+    this.measureCalls.push(url);
     return this.result;
   }
 }

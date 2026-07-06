@@ -17,6 +17,11 @@ export interface CrawlConfigProps {
   // ProcessPageTaskUseCase/client-side-only-content-rule. A user opts in
   // knowing that trade-off; it's not worth paying by default on every crawl.
   deepCsrCheck: boolean;
+  // Off by default: adds a real browser navigation + a deliberate ~1s
+  // settle wait per page (see PlaywrightWebVitalsMeasurer) purely to
+  // measure Core Web Vitals (LCP/CLS/TBT) — real cost with no content
+  // benefit, so it's opt-in like deepCsrCheck above.
+  measureWebVitals: boolean;
 }
 
 const DEFAULTS: CrawlConfigProps = {
@@ -25,6 +30,7 @@ const DEFAULTS: CrawlConfigProps = {
   respectRobots: true,
   concurrency: 2,
   deepCsrCheck: false,
+  measureWebVitals: false,
 };
 
 // Upper bounds, not just lower ones — an API caller could otherwise
@@ -85,6 +91,10 @@ export class CrawlConfig {
 
   get deepCsrCheck(): boolean {
     return this.props.deepCsrCheck;
+  }
+
+  get measureWebVitals(): boolean {
+    return this.props.measureWebVitals;
   }
 
   toJSON(): CrawlConfigProps {

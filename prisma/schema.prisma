@@ -159,6 +159,12 @@ model Page {
   robotsMissingSitemapDirective Boolean?
   sitemapIsUnreachable         Boolean        @default(false)
   sitemapIsInvalidXml          Boolean?
+  // Core Web Vitals, captured only when CrawlConfig.measureWebVitals is on
+  // — null means "not measured this crawl". Feeds poor-lcp/poor-cls/
+  // poor-tbt audit rules.
+  lcpMs                        Int?
+  cls                          Float?
+  tbtMs                        Int?
   links                       Link[]
   auditIssues                 AuditIssue[]
   schemaMarkups               SchemaMarkup[]

@@ -11,6 +11,17 @@ describe("CrawlConfig", () => {
       expect(result.value.maxPages).toBe(200);
       expect(result.value.respectRobots).toBe(true);
       expect(result.value.concurrency).toBe(2);
+      expect(result.value.deepCsrCheck).toBe(false);
+      expect(result.value.measureWebVitals).toBe(false);
+    }
+  });
+
+  it("allows opting into measureWebVitals", () => {
+    const result = CrawlConfig.create({ measureWebVitals: true });
+    if (isOk(result)) {
+      expect(result.value.measureWebVitals).toBe(true);
+    } else {
+      throw new Error("expected ok result");
     }
   });
 

@@ -6,6 +6,7 @@ import type { PageRepositoryPort } from "@/application/crawling/ports/page-repos
 import type { CrawlQueuePort, PageTask } from "@/application/crawling/ports/crawl-queue-port";
 import type { RobotsPort } from "@/application/crawling/ports/robots-port";
 import type { RateLimiterPort } from "@/application/crawling/ports/rate-limiter-port";
+import type { WebVitalsPort } from "@/application/crawling/ports/web-vitals-port";
 import { needsRendering } from "@/domain/crawling/services/js-rendering-heuristic";
 import { Page } from "@/domain/crawling/entities/page";
 import { Link } from "@/domain/crawling/entities/link";
@@ -23,6 +24,10 @@ export interface ProcessPageTaskDeps {
   robots: RobotsPort;
   rateLimiter: RateLimiterPort;
   logger: Logger;
+  // Optional: only required when a crawl actually opts into
+  // CrawlConfig.measureWebVitals — keeps every existing test/caller that
+  // doesn't care about Core Web Vitals unchanged.
+  webVitals?: WebVitalsPort;
 }
 
 // Politeness floor when robots.txt specifies no Crawl-delay (or
@@ -150,6 +155,28 @@ export class ProcessPageTaskUseCase {
         ? isClientSideOnly(rawWordCount, renderedWordCount)
         : false;
 
+    // Opt-in (CrawlConfig.measureWebVitals): a separate real navigation
+    // dedicated to timing collection (see PlaywrightWebVitalsMeasurer) —
+    // not reused from the fetch/render above, since those don't inject the
+    // PerformanceObserver collector script and re-navigating is simpler
+    // than threading that concern through PageRendererPort's shared path.
+    let lcpMs: number | null = null;
+    let cls: number | null = null;
+    let tbtMs: number | null = null;
+    if (crawlJob.config.measureWebVitals && this.deps.webVitals) {
+      const vitalsResult = await this.deps.webVitals.measure(task.url);
+      if (vitalsResult.ok) {
+        lcpMs = vitalsResult.value.lcpMs;
+        cls = vitalsResult.value.cls;
+        tbtMs = vitalsResult.value.tbtMs;
+      } else {
+        logger.warn("Web vitals measurement failed, skipping for this page", {
+          url: task.url.href,
+          code: vitalsResult.error.code,
+        });
+      }
+    }
+
     const page = Page.create(crawlJob.id, fetched.finalUrl, {
       statusCode: fetched.statusCode,
       title: parsed.title,
@@ -174,6 +201,9 @@ export class ProcessPageTaskUseCase {
       externalScriptOrigins: parsed.externalScriptOrigins,
       rawWordCount,
       isClientSideOnlyContent,
+      lcpMs,
+      cls,
+      tbtMs,
     });
 
     const discoveredTasks: PageTask[] = [];

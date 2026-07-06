@@ -88,6 +88,9 @@ function toDomain(row: PrismaPageRow & { links: PrismaLinkRow[] }): Page {
     robotsMissingSitemapDirective: row.robotsMissingSitemapDirective,
     sitemapIsUnreachable: row.sitemapIsUnreachable,
     sitemapIsInvalidXml: row.sitemapIsInvalidXml,
+    lcpMs: row.lcpMs,
+    cls: row.cls,
+    tbtMs: row.tbtMs,
   };
 
   const links = row.links.map((linkRow) =>
@@ -139,6 +142,9 @@ export class PrismaPageRepository implements PageRepositoryPort {
       robotsMissingSitemapDirective: page.robotsMissingSitemapDirective,
       sitemapIsUnreachable: page.sitemapIsUnreachable,
       sitemapIsInvalidXml: page.sitemapIsInvalidXml,
+      lcpMs: page.lcpMs,
+      cls: page.cls,
+      tbtMs: page.tbtMs,
       crawledAt: page.crawledAt,
     };
 

@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "pages" ADD COLUMN "cls" REAL;
+ALTER TABLE "pages" ADD COLUMN "lcpMs" INTEGER;
+ALTER TABLE "pages" ADD COLUMN "tbtMs" INTEGER;

@@ -83,6 +83,9 @@ describe("selectSitemapEntries", () => {
         robotsMissingSitemapDirective: null,
         sitemapIsUnreachable: false,
         sitemapIsInvalidXml: null,
+        lcpMs: null,
+        cls: null,
+        tbtMs: null,
       },
       []
     );

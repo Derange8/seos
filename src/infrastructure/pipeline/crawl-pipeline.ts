@@ -6,6 +6,7 @@ import { HttpPageFetcher } from "@/infrastructure/crawler/http/http-page-fetcher
 import { HttpRobotsFetcher } from "@/infrastructure/crawler/http/http-robots-fetcher";
 import { HostRateLimiter } from "@/infrastructure/crawler/rate-limiting/host-rate-limiter";
 import { PlaywrightPageRenderer } from "@/infrastructure/crawler/playwright/playwright-page-renderer";
+import { PlaywrightWebVitalsMeasurer } from "@/infrastructure/crawler/playwright/playwright-web-vitals-measurer";
 import { CheerioHtmlParser } from "@/infrastructure/html/cheerio-html-parser";
 import { ConsoleLogger } from "@/infrastructure/logging/console-logger";
 import { startGoogleTrackingScheduler } from "@/infrastructure/scheduling/google-tracking-scheduler";
@@ -76,6 +77,7 @@ export function createCrawlPipeline(
     robots: new HttpRobotsFetcher({ allowPrivateNetworks: options.allowPrivateNetworks }),
     rateLimiter: new HostRateLimiter(),
     logger,
+    webVitals: new PlaywrightWebVitalsMeasurer({ allowPrivateNetworks: options.allowPrivateNetworks }),
   });
 
   const auditRunRepository = new PrismaAuditRunRepository(prisma);

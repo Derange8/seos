@@ -60,6 +60,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (typeof body.respectRobots === "boolean") configOverrides.respectRobots = body.respectRobots;
   if (typeof body.concurrency === "number") configOverrides.concurrency = body.concurrency;
   if (typeof body.deepCsrCheck === "boolean") configOverrides.deepCsrCheck = body.deepCsrCheck;
+  if (typeof body.measureWebVitals === "boolean") configOverrides.measureWebVitals = body.measureWebVitals;
 
   const useCase = new StartCrawlUseCase({
     crawlJobRepository: new PrismaCrawlJobRepository(prisma),
