@@ -10,6 +10,8 @@ import { AnthropicContentSuggestionProvider } from "@/infrastructure/llm/anthrop
 
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 const DEEPSEEK_DEFAULT_MODEL = "deepseek-chat";
+const GEMINI_OPENAI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const GEMINI_DEFAULT_MODEL = "gemini-2.5-flash";
 
 function createProviderFor(provider: LlmProvider, apiKey: string, model: string | null): ContentEnrichmentPort {
   switch (provider) {
@@ -22,6 +24,13 @@ function createProviderFor(provider: LlmProvider, apiKey: string, model: string 
         apiKey,
         model: model ?? DEEPSEEK_DEFAULT_MODEL,
         baseUrl: DEEPSEEK_API_URL,
+      });
+    case "gemini":
+      // Gemini's OpenAI-compatible chat endpoint — reused like DeepSeek.
+      return new OpenAiContentSuggestionProvider({
+        apiKey,
+        model: model ?? GEMINI_DEFAULT_MODEL,
+        baseUrl: GEMINI_OPENAI_URL,
       });
   }
 }

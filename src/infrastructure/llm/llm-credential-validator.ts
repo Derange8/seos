@@ -19,6 +19,13 @@ function checkFor(provider: LlmProvider, apiKey: string): ProviderCheck {
         url: "https://api.anthropic.com/v1/models",
         headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       };
+    case "gemini":
+      // Gemini's own models-list endpoint, header auth (x-goog-api-key). Same
+      // cheap free GET as the others — confirms the key authenticates.
+      return {
+        url: "https://generativelanguage.googleapis.com/v1beta/models",
+        headers: { "x-goog-api-key": apiKey },
+      };
   }
 }
 

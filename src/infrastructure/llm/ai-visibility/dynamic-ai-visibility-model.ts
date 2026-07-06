@@ -14,6 +14,7 @@ import type { LlmProvider } from "@/domain/settings/entities/llm-settings";
 import type { Logger } from "@/shared/logger";
 import { OpenAiAiVisibilityModel } from "@/infrastructure/llm/ai-visibility/openai-ai-visibility-model";
 import { AnthropicAiVisibilityModel } from "@/infrastructure/llm/ai-visibility/anthropic-ai-visibility-model";
+import { GeminiAiVisibilityModel } from "@/infrastructure/llm/ai-visibility/gemini-ai-visibility-model";
 
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 const DEEPSEEK_DEFAULT_MODEL = "deepseek-chat";
@@ -26,6 +27,9 @@ function createModelFor(provider: LlmProvider, apiKey: string, model: string | n
     case "anthropic":
       // Anthropic's Messages API has its own web_search tool, enabled per-call.
       return new AnthropicAiVisibilityModel({ apiKey, model: model ?? undefined });
+    case "gemini":
+      // Gemini's native google_search grounding tool. engineId() is "gemini".
+      return new GeminiAiVisibilityModel({ apiKey, model: model ?? undefined });
     case "deepseek":
       // DeepSeek is only OpenAI-COMPATIBLE (chat surface) — no web search. Leave
       // supportsWebSearch off so a web_grounded probe honestly rejects here

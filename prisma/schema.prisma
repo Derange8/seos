@@ -429,6 +429,7 @@ enum LlmProvider {
   openai
   anthropic
   deepseek
+  gemini
 }
 
 model LlmSettings {

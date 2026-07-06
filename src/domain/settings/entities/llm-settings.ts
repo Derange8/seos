@@ -1,4 +1,4 @@
-export type LlmProvider = "openai" | "anthropic" | "deepseek";
+export type LlmProvider = "openai" | "anthropic" | "deepseek" | "gemini";
 
 export interface LlmSettingsProps {
   provider: LlmProvider;
