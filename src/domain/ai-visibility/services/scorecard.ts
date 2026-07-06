@@ -1,5 +1,5 @@
 import type { Slot } from "@/domain/ai-visibility/slot";
-import { dominantSlot } from "@/domain/ai-visibility/slot";
+import { dominantSlot, isConfident } from "@/domain/ai-visibility/slot";
 import type { QueryOutcome } from "@/domain/ai-visibility/entities/probe-run";
 
 export interface CompetitorCount {
@@ -29,7 +29,14 @@ export interface AiVisibilityScorecard {
   citedSamples: number;
   citedPct: number;
   competitorFrequency: CompetitorCount[];
+  // Queries whose dominant slot is OPEN AND whose reading is stable enough to
+  // trust (see isConfident) — a low-consensus OPEN is NOT surfaced as a real
+  // opportunity here, it goes to lowConfidenceQueries instead.
   winnableQueries: string[];
+  // Queries whose sample distribution is too split to trust the dominant slot
+  // (below the consensus threshold) — "measure again / add samples" rather
+  // than a confident reading either way.
+  lowConfidenceQueries: string[];
 }
 
 function pct(n: number, total: number): number {
@@ -49,7 +56,12 @@ export function buildScorecard(outcomes: readonly QueryOutcome[]): AiVisibilityS
     .map(([name, queryCount]) => ({ name, queryCount }))
     .sort((a, b) => b.queryCount - a.queryCount);
 
-  const winnableQueries = outcomes.filter((o) => dominantSlot(o.slots) === "OPEN").map((o) => o.query);
+  // A winnable query must be OPEN by plurality AND a confident reading — a
+  // low-consensus OPEN is a coin-flip, not an opportunity to act on.
+  const winnableQueries = outcomes
+    .filter((o) => dominantSlot(o.slots) === "OPEN" && isConfident(o.slots))
+    .map((o) => o.query);
+  const lowConfidenceQueries = outcomes.filter((o) => !isConfident(o.slots)).map((o) => o.query);
 
   // Sample-level citation count, same denominator as the slot percentages so
   // "cited %" reads on the same footing as "mentioned %".
@@ -67,5 +79,6 @@ export function buildScorecard(outcomes: readonly QueryOutcome[]): AiVisibilityS
     citedPct: pct(citedSamples, total),
     competitorFrequency,
     winnableQueries,
+    lowConfidenceQueries,
   };
 }

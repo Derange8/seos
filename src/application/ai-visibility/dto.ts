@@ -1,6 +1,6 @@
 import type { AiVisibilityProbeRun } from "@/domain/ai-visibility/entities/probe-run";
 import type { Slot } from "@/domain/ai-visibility/slot";
-import { dominantSlot } from "@/domain/ai-visibility/slot";
+import { dominantSlot, slotConsensus, isConfident } from "@/domain/ai-visibility/slot";
 import { buildScorecard, type AiVisibilityScorecard } from "@/domain/ai-visibility/services/scorecard";
 import { computeAiVisibilityDelta, type AiVisibilityDelta } from "@/domain/ai-visibility/services/delta";
 import type {
@@ -27,6 +27,11 @@ export interface AiVisibilityQueryDto {
   // a parametric run.
   citedSamples: number;
   citations: AiVisibilityCitationDto[];
+  // How stable this query's dominant slot is across its samples (0..1), and
+  // whether that clears the confidence bar. A low-consensus query is a
+  // coin-flip, not a reliable reading — the UI/report flag it.
+  consensus: number;
+  confident: boolean;
 }
 
 export interface AiVisibilityRunDto {
@@ -114,6 +119,8 @@ export function toAiVisibilityRunDto(
       competitorsMentioned: [...o.competitorsMentioned],
       citedSamples: o.citedSamples,
       citations: o.citations.map((c) => (c.title !== undefined ? { url: c.url, title: c.title } : { url: c.url })),
+      consensus: slotConsensus(o.slots),
+      confident: isConfident(o.slots),
     })),
   };
 }

@@ -36,3 +36,28 @@ export function dominantSlot(slots: readonly Slot[]): Slot {
   }
   return counts.OPEN > counts.CONTESTED ? "OPEN" : "CONTESTED";
 }
+
+// How stable the dominant reading is: the share of samples that landed in the
+// dominant slot (0..1). "3 of 4 OPEN" → 0.75; a query split 2/2/0 across slots
+// is far less certain than 4/0/0, and this is what tells them apart. Uses the
+// same dominant slot as dominantSlot(), so the ratio always describes the slot
+// actually reported. Empty input → 0 (nothing measured, no confidence).
+export function slotConsensus(slots: readonly Slot[]): number {
+  if (slots.length === 0) return 0;
+  const dominant = dominantSlot(slots);
+  const inDominant = slots.filter((s) => s === dominant).length;
+  return inDominant / slots.length;
+}
+
+// Below this consensus a query's reading is treated as too unstable to trust —
+// e.g. a 2/5 plurality. Deliberately a single tunable constant in one place.
+// At 3-5 samples this is the honest bar; raise samples for finer thresholds.
+export const CONFIDENCE_THRESHOLD = 0.6;
+
+// Is the dominant reading stable enough to act on? A single sample is trivially
+// 100% "consensus" but that's not real confidence — still, if the user chose 1
+// sample they aren't asking for a confidence signal, so we don't special-case
+// it here; the threshold simply passes it.
+export function isConfident(slots: readonly Slot[]): boolean {
+  return slots.length > 0 && slotConsensus(slots) >= CONFIDENCE_THRESHOLD;
+}

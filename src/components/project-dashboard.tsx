@@ -2065,6 +2065,14 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                             <span className="text-xs text-muted-foreground">
                               M{q.mentioned}/O{q.open}/C{q.contested}
                             </span>
+                            {!q.confident && (
+                              <span
+                                className="text-xs text-yellow-500"
+                                title={`Reading too split to trust (${Math.round(q.consensus * 100)}% consensus) — measure again with more samples`}
+                              >
+                                ⚠ uncertain
+                              </span>
+                            )}
                             {q.citedSamples > 0 && (
                               <span className="text-xs text-amber-300" title="Samples that cited your domain">
                                 🔗 {q.citedSamples}

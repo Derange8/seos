@@ -93,6 +93,18 @@ export function formatAiVisibilityReport(
     );
   }
 
+  // Low-confidence queries — the reading was too split across samples to trust,
+  // kept honest (not counted as a win/loss/opportunity either way).
+  if (sc.lowConfidenceQueries.length > 0) {
+    const shown = sc.lowConfidenceQueries.slice(0, MAX_LISTED);
+    const extra = sc.lowConfidenceQueries.length - shown.length;
+    sections.push(
+      `UNCERTAIN QUERIES (readings too split to trust — measure again with more samples)\n` +
+        shown.map((q) => `  • ${q}`).join("\n") +
+        (extra > 0 ? `\n  …and ${extra} more` : "")
+    );
+  }
+
   // Competitors dominating
   if (sc.competitorFrequency.length > 0) {
     const shown = sc.competitorFrequency.slice(0, MAX_LISTED);

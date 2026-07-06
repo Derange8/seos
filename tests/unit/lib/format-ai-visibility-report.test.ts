@@ -20,6 +20,7 @@ function scorecard(overrides: Partial<AiVisibilityScorecard> = {}): AiVisibility
     citedPct: 25,
     competitorFrequency: [{ name: "Polymarket", queryCount: 2 }],
     winnableQueries: ["best prediction market"],
+    lowConfidenceQueries: [],
     ...overrides,
   };
 }
@@ -41,6 +42,8 @@ function run(overrides: Partial<AiVisibilityRunDto> = {}): AiVisibilityRunDto {
         competitorsMentioned: [],
         citedSamples: 1,
         citations: [{ url: "https://acme.com/x" }],
+        consensus: 1,
+        confident: true,
       },
     ],
     delta: null,
@@ -186,6 +189,18 @@ describe("formatAiVisibilityReport", () => {
     expect(report).toContain("• best prediction market");
     expect(report).toContain("COMPETITORS AI RECOMMENDS INSTEAD");
     expect(report).toContain("• Polymarket (2 queries)");
+  });
+
+  it("lists low-consensus queries in an UNCERTAIN section", () => {
+    const report = formatAiVisibilityReport(
+      "acme.com",
+      run({ scorecard: scorecard({ lowConfidenceQueries: ["is it safe", "does it work"] }) }),
+      [],
+      []
+    );
+    expect(report).toContain("UNCERTAIN QUERIES");
+    expect(report).toContain("• is it safe");
+    expect(report).toContain("• does it work");
   });
 
   it("renders resolved before/after experiments, flagging a citation gain", () => {

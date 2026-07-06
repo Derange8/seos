@@ -36,10 +36,21 @@ describe("buildScorecard", () => {
     ]);
   });
 
-  it("lists only queries whose dominant slot is OPEN as winnable", () => {
+  it("lists only confident OPEN queries as winnable, and split ones as low-confidence", () => {
     const sc = buildScorecard(outcomes);
-    // q3 all-OPEN -> winnable; q4 is an OPEN/CONTESTED tie -> CONTESTED (not winnable)
+    // q3 all-OPEN (consensus 1.0) -> winnable. q4 is a 1/1 OPEN/CONTESTED split
+    // (consensus 0.5, under threshold) -> NOT winnable, flagged low-confidence.
     expect(sc.winnableQueries).toEqual(["q3"]);
+    expect(sc.lowConfidenceQueries).toEqual(["q4"]);
+  });
+
+  it("keeps a low-consensus OPEN out of winnable (a coin-flip isn't an opportunity)", () => {
+    // OPEN is the plurality (3 of 6) but consensus is only 0.5, under threshold.
+    const sc = buildScorecard([
+      { query: "shaky", slots: ["OPEN", "OPEN", "OPEN", "CONTESTED", "CONTESTED", "MENTIONED"], competitorsMentioned: [], citedSamples: 0, citations: [] },
+    ]);
+    expect(sc.winnableQueries).toEqual([]);
+    expect(sc.lowConfidenceQueries).toEqual(["shaky"]);
   });
 
   it("handles an empty run without dividing by zero", () => {
