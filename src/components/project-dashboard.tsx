@@ -383,6 +383,9 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [citationDrafts, setCitationDrafts] = useState<Record<string, CitationDraft>>({});
   const [draftGapErrors, setDraftGapErrors] = useState<Record<string, string>>({});
   const [copiedDraftQuery, setCopiedDraftQuery] = useState<string | null>(null);
+  const [publishingCitationQuery, setPublishingCitationQuery] = useState<string | null>(null);
+  const [citationPublishErrors, setCitationPublishErrors] = useState<Record<string, string>>({});
+  const [citationPublishedQueries, setCitationPublishedQueries] = useState<Record<string, boolean>>({});
   const [experiments, setExperiments] = useState<VisibilityExperimentDto[]>([]);
 
   const [contentDrafts, setContentDrafts] = useState<PageContentDraftDto[]>([]);
@@ -736,6 +739,35 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     await navigator.clipboard.writeText(citationDraftToText(draft));
     setCopiedDraftQuery(query);
     setTimeout(() => setCopiedDraftQuery(null), 2000);
+  }
+
+  async function handlePublishCitationDraft(query: string) {
+    const draft = citationDrafts[query];
+    if (!draft) return;
+
+    setPublishingCitationQuery(query);
+    setCitationPublishErrors((prev) => ({ ...prev, [query]: "" }));
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${project.id}/ai-visibility/publish`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ draft }),
+      });
+    } catch {
+      setPublishingCitationQuery(null);
+      setCitationPublishErrors((prev) => ({ ...prev, [query]: "Network error — check your connection and try again." }));
+      return;
+    }
+    const data = await response.json();
+
+    setPublishingCitationQuery(null);
+    if (!response.ok) {
+      setCitationPublishErrors((prev) => ({ ...prev, [query]: data.error ?? "Failed to publish to WordPress" }));
+      return;
+    }
+    setCitationPublishedQueries((prev) => ({ ...prev, [query]: true }));
   }
 
   async function handleRunAiVisibilityProbe() {
@@ -1934,10 +1966,34 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                               <div className="flex flex-col gap-2 rounded-md border border-white/10 bg-black/20 p-3">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="font-medium">{citationDrafts[q.query].title}</span>
-                                  <Button variant="outline" size="sm" onClick={() => handleCopyCitationDraft(q.query)}>
-                                    {copiedDraftQuery === q.query ? "Copied" : "Copy"}
-                                  </Button>
+                                  <div className="flex items-center gap-2">
+                                    <Button variant="outline" size="sm" onClick={() => handleCopyCitationDraft(q.query)}>
+                                      {copiedDraftQuery === q.query ? "Copied" : "Copy"}
+                                    </Button>
+                                    {wordPressConnection && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handlePublishCitationDraft(q.query)}
+                                        disabled={publishingCitationQuery === q.query || citationPublishedQueries[q.query]}
+                                      >
+                                        {citationPublishedQueries[q.query]
+                                          ? "Draft created in WordPress"
+                                          : publishingCitationQuery === q.query
+                                            ? "Publishing…"
+                                            : "Publish to WordPress"}
+                                      </Button>
+                                    )}
+                                  </div>
                                 </div>
+                                {!wordPressConnection && (
+                                  <p className="text-xs text-muted-foreground/70">
+                                    Connect WordPress (Integrations tab) to push this as a new draft page.
+                                  </p>
+                                )}
+                                {citationPublishErrors[q.query] && (
+                                  <p className="text-xs text-red-400">{citationPublishErrors[q.query]}</p>
+                                )}
                                 <p className="text-xs italic text-muted-foreground">
                                   {citationDrafts[q.query].metaDescription}
                                 </p>

@@ -55,6 +55,35 @@ async function startMockWordPress(posts: MockPost[]): Promise<{ origin: string; 
       return;
     }
 
+    if (collectionMatch && req.method === "POST") {
+      const postType = collectionMatch[1] === "pages" ? "page" : "post";
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", () => {
+        const parsed = JSON.parse(body || "{}");
+        const newId = Math.max(0, ...posts.map((p) => p.id)) + 1;
+        const created: MockPost = {
+          id: newId,
+          type: postType,
+          slug: `new-post-${newId}`,
+          title: parsed.title ?? "",
+          excerpt: parsed.excerpt ?? "",
+          content: parsed.content ?? "",
+        };
+        posts.push(created);
+        res.writeHead(201, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            id: created.id,
+            title: { raw: created.title, rendered: created.title },
+            excerpt: { raw: created.excerpt ?? "", rendered: created.excerpt ?? "" },
+            content: { raw: created.content ?? "", rendered: created.content ?? "" },
+          })
+        );
+      });
+      return;
+    }
+
     const itemMatch = url.pathname.match(/^\/wp-json\/wp\/v2\/(pages|posts)\/(\d+)$/);
     if (itemMatch && req.method === "POST") {
       const postType = itemMatch[1] === "pages" ? "page" : "post";
@@ -283,5 +312,58 @@ describe("WordPressRestApiClient", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("WORDPRESS_POST_NOT_FOUND");
+  });
+
+  it("createPost creates a new page as a draft on the mock server", async () => {
+    const server = await startMockWordPress([]);
+    cleanup = server.close;
+    const client = new WordPressRestApiClient({ allowPrivateNetworks: true });
+
+    const result = await client.createPost(connection(server.origin), {
+      title: "Why Choose Us",
+      excerpt: "A short summary",
+      content: "<h2>Section</h2><p>Body</p>",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.postType).toBe("page");
+      expect(result.value.currentTitle).toBe("Why Choose Us");
+      expect(result.value.currentExcerpt).toBe("A short summary");
+      expect(result.value.currentContent).toBe("<h2>Section</h2><p>Body</p>");
+    }
+  });
+
+  it("createPost's new page is then findable by its generated slug", async () => {
+    const server = await startMockWordPress([]);
+    cleanup = server.close;
+    const client = new WordPressRestApiClient({ allowPrivateNetworks: true });
+
+    const created = await client.createPost(connection(server.origin), {
+      title: "New Page",
+      excerpt: "",
+      content: "<p>Content</p>",
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const lookup = await client.findPostByUrl(connection(server.origin), `${server.origin}/new-post-${created.value.id}`);
+    expect(lookup.ok).toBe(true);
+    if (lookup.ok) expect(lookup.value.id).toBe(created.value.id);
+  });
+
+  it("createPost returns WORDPRESS_UNAUTHORIZED for wrong credentials", async () => {
+    const server = await startMockWordPress([]);
+    cleanup = server.close;
+    const client = new WordPressRestApiClient({ allowPrivateNetworks: true });
+
+    const result = await client.createPost(connection(server.origin, "wrong password"), {
+      title: "Title",
+      excerpt: "",
+      content: "",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("WORDPRESS_UNAUTHORIZED");
   });
 });

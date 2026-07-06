@@ -4,6 +4,7 @@ import {
   WordPressPostNotFoundError,
   WordPressUnauthorizedError,
   WordPressUnreachableError,
+  type NewWordPressPost,
   type WordPressClientError,
   type WordPressClientPort,
   type WordPressPostRef,
@@ -137,6 +138,38 @@ export class WordPressRestApiClient implements WordPressClientPort {
 
     const error = this.toClientError(response.value.status, ` while updating ${post.postType} ${post.id}`);
     return error ? err(error) : ok(undefined);
+  }
+
+  // Always creates a "pages" collection item (not "posts") — citation
+  // content targets a standalone topic/query, the same conceptual slot a
+  // static page occupies on most sites, and pages don't need a category/
+  // author-archive placement the way blog posts conventionally do.
+  async createPost(
+    connection: WordPressConnection,
+    post: NewWordPressPost
+  ): Promise<Result<WordPressPostRef, WordPressClientError>> {
+    const guardResult = await this.guardAgainstPrivateNetwork(connection.siteUrl);
+    if (!guardResult.ok) return guardResult;
+
+    const response = await this.request(connection, "POST", "/wp/v2/pages", {
+      title: post.title,
+      excerpt: post.excerpt,
+      content: post.content,
+      status: "draft",
+    });
+    if (!response.ok) return response;
+
+    const error = this.toClientError(response.value.status, ` while creating a new page "${post.title}"`);
+    if (error) return err(error);
+
+    const item = response.value.data as WordPressPostListItem;
+    return ok({
+      id: item.id,
+      postType: "page",
+      currentTitle: item.title.raw ?? item.title.rendered,
+      currentExcerpt: item.excerpt.raw ?? item.excerpt.rendered,
+      currentContent: item.content.raw ?? item.content.rendered,
+    });
   }
 
   private extractSlug(url: string): string {

@@ -45,6 +45,12 @@ export interface WordPressPostRef {
   currentContent: string;
 }
 
+export interface NewWordPressPost {
+  title: string;
+  excerpt: string;
+  content: string;
+}
+
 export interface WordPressClientPort {
   testConnection(connection: WordPressConnection): Promise<Result<void, WordPressClientError>>;
   findPostByUrl(connection: WordPressConnection, url: string): Promise<Result<WordPressPostRef, WordPressClientError>>;
@@ -63,4 +69,16 @@ export interface WordPressClientPort {
     post: WordPressPostRef,
     content: string
   ): Promise<Result<void, WordPressClientError>>;
+  // Creates a brand-new WordPress page as a DRAFT (never published
+  // directly) — used by PublishCitationContentUseCase to push AI-visibility
+  // citation content, which targets a query/topic with no existing crawled
+  // page to update (unlike PageContentDraft's updateTitle/Excerpt/Content,
+  // which all act on a page that already exists). Drafting rather than
+  // publishing outright means a human reviews it in WordPress before it
+  // goes live — appropriate for a wholly new page, unlike the "the click
+  // on Publish is the approval" reasoning for updating an already-live page.
+  createPost(
+    connection: WordPressConnection,
+    post: NewWordPressPost
+  ): Promise<Result<WordPressPostRef, WordPressClientError>>;
 }
