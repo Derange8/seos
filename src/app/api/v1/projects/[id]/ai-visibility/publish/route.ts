@@ -3,6 +3,9 @@ import { prisma } from "@/infrastructure/persistence/prisma/prisma-client";
 import { PrismaWordPressConnectionRepository } from "@/infrastructure/persistence/prisma/prisma-wordpress-connection-repository";
 import { WordPressRestApiClient } from "@/infrastructure/wordpress/wordpress-rest-api-client";
 import { PublishCitationContentUseCase } from "@/application/ai-visibility/use-cases/publish-citation-content-use-case";
+import { StartVisibilityExperimentUseCase } from "@/application/ai-visibility/use-cases/start-visibility-experiment-use-case";
+import { PrismaAiVisibilityRunRepository } from "@/infrastructure/persistence/prisma/prisma-ai-visibility-run-repository";
+import { PrismaVisibilityExperimentRepository } from "@/infrastructure/persistence/prisma/prisma-visibility-experiment-repository";
 import type { CitationDraft } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { requireProjectAccess } from "@/infrastructure/auth/require-project-access";
 import { shouldAllowPrivateNetworks } from "@/infrastructure/config/allow-private-networks";
@@ -43,6 +46,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!isCitationDraft(draft)) {
     return NextResponse.json({ error: "A valid citation draft is required", code: "INVALID_DRAFT" }, { status: 400 });
   }
+  // The query this draft targets — optional so old callers still work, but when
+  // present it lets us open the visibility experiment on the real ACT
+  // (publishing), not on merely drafting. Drafting is intent; publishing is the
+  // intervention whose effect the next probe should measure.
+  const rawQuery = (body as { query?: unknown } | null)?.query;
+  const query = typeof rawQuery === "string" && rawQuery.trim().length > 0 ? rawQuery.trim() : null;
 
   const useCase = new PublishCitationContentUseCase({
     wordPressConnectionRepository: new PrismaWordPressConnectionRepository(prisma),
@@ -53,6 +62,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!result.ok) {
     const status = ERROR_STATUS[result.error.code] ?? 400;
     return NextResponse.json({ error: result.error.message, code: result.error.code }, { status });
+  }
+
+  // Publishing succeeded — this is the observable act, so open an experiment to
+  // track whether this query's visibility moves by the next probe. Never let
+  // ledger bookkeeping fail the publish the user asked for.
+  if (query) {
+    try {
+      await new StartVisibilityExperimentUseCase({
+        runRepository: new PrismaAiVisibilityRunRepository(prisma),
+        experimentRepository: new PrismaVisibilityExperimentRepository(prisma),
+      }).execute(projectId, query);
+    } catch (ledgerError) {
+      console.error("Failed to open visibility experiment after publish", ledgerError);
+    }
   }
 
   return NextResponse.json(result.value);

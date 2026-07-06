@@ -3,10 +3,7 @@ import { prisma } from "@/infrastructure/persistence/prisma/prisma-client";
 import { PrismaProjectRepository } from "@/infrastructure/persistence/prisma/prisma-project-repository";
 import { PrismaLlmSettingsRepository } from "@/infrastructure/persistence/prisma/prisma-llm-settings-repository";
 import { DynamicAiVisibilityModel } from "@/infrastructure/llm/ai-visibility/dynamic-ai-visibility-model";
-import { PrismaAiVisibilityRunRepository } from "@/infrastructure/persistence/prisma/prisma-ai-visibility-run-repository";
-import { PrismaVisibilityExperimentRepository } from "@/infrastructure/persistence/prisma/prisma-visibility-experiment-repository";
 import { GenerateCitationContentUseCase } from "@/application/ai-visibility/use-cases/generate-citation-content-use-case";
-import { StartVisibilityExperimentUseCase } from "@/application/ai-visibility/use-cases/start-visibility-experiment-use-case";
 import { AiVisibilityProviderNotConfiguredError } from "@/application/ai-visibility/errors";
 import { requireProjectAccess } from "@/infrastructure/auth/require-project-access";
 import { ConsoleLogger } from "@/infrastructure/logging/console-logger";
@@ -44,17 +41,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     const draft = await useCase.execute(projectId, query, gaps);
-    // Drafting is the observable "act" — open an experiment to track whether
-    // this query's visibility moves by the next probe. Never let ledger
-    // bookkeeping fail the draft the user asked for.
-    try {
-      await new StartVisibilityExperimentUseCase({
-        runRepository: new PrismaAiVisibilityRunRepository(prisma),
-        experimentRepository: new PrismaVisibilityExperimentRepository(prisma),
-      }).execute(projectId, query);
-    } catch (ledgerError) {
-      console.error("Failed to open visibility experiment", ledgerError);
-    }
+    // Note: the visibility experiment is opened on PUBLISH, not here — drafting
+    // is intent, publishing is the act whose effect the next probe measures
+    // (see the publish route).
     return NextResponse.json(draft);
   } catch (error) {
     if (error instanceof AiVisibilityProviderNotConfiguredError) {

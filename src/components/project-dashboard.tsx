@@ -113,6 +113,8 @@ const TRANSLATIONS = {
   copied: { en: "Copied!", tr: "Kopyalandı!" },
   copyFullReport: { en: "Copy full report", tr: "Tüm raporu kopyala" },
   copyReport: { en: "Copy report", tr: "Raporu kopyala" },
+  prepareFixPlan: { en: "Prepare fix plan", tr: "Düzeltme planı hazırla" },
+  preparingFixPlan: { en: "Preparing…", tr: "Hazırlanıyor…" },
   approveApply: { en: "Approve & Apply", tr: "Onayla & Uygula" },
   applying: { en: "Applying…", tr: "Uygulanıyor…" },
   revert: { en: "Revert", tr: "Geri al" },
@@ -387,6 +389,8 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [diagnosingQuery, setDiagnosingQuery] = useState<string | null>(null);
   const [diagnoses, setDiagnoses] = useState<Record<string, string[]>>({});
   const [diagnoseErrors, setDiagnoseErrors] = useState<Record<string, string>>({});
+  const [isBuildingFixPlan, setIsBuildingFixPlan] = useState(false);
+  const [fixPlanError, setFixPlanError] = useState<string | null>(null);
   const [draftingQuery, setDraftingQuery] = useState<string | null>(null);
   const [citationDrafts, setCitationDrafts] = useState<Record<string, CitationDraft>>({});
   const [draftGapErrors, setDraftGapErrors] = useState<Record<string, string>>({});
@@ -765,7 +769,9 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       response = await fetch(`/api/v1/projects/${project.id}/ai-visibility/publish`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ draft }),
+        // Pass the query so the server opens the visibility experiment on this
+        // real publish (the act), not on drafting.
+        body: JSON.stringify({ draft, query }),
       });
     } catch {
       setPublishingCitationQuery(null);
@@ -780,6 +786,49 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       return;
     }
     setCitationPublishedQueries((prev) => ({ ...prev, [query]: true }));
+  }
+
+  // Automated middle of the loop: fetch a fix plan (diagnose + generate already
+  // run server-side for the winnable queries) and hydrate the per-query
+  // diagnosis + draft state, so the existing "Approve & publish" gate on each
+  // query row becomes the single approval step for the whole plan.
+  async function handleBuildFixPlan() {
+    setIsBuildingFixPlan(true);
+    setFixPlanError(null);
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${project.id}/ai-visibility/fix-plan`, { method: "POST" });
+    } catch {
+      setIsBuildingFixPlan(false);
+      setFixPlanError("Network error — check your connection and try again.");
+      return;
+    }
+    const data = await response.json();
+    setIsBuildingFixPlan(false);
+    if (!response.ok) {
+      setFixPlanError(data.error ?? "Failed to build the fix plan");
+      return;
+    }
+    if (data.noGroundedRun) {
+      setFixPlanError("Run a web-search measurement first — a fix plan needs a web-grounded probe.");
+      return;
+    }
+    const items = (data.items ?? []) as { query: string; gaps: string[]; draft: CitationDraft }[];
+    if (items.length === 0) {
+      setFixPlanError("No winnable queries to plan for yet — nothing to fix.");
+      return;
+    }
+    setDiagnoses((prev) => {
+      const next = { ...prev };
+      for (const item of items) next[item.query] = item.gaps;
+      return next;
+    });
+    setCitationDrafts((prev) => {
+      const next = { ...prev };
+      for (const item of items) next[item.query] = item.draft;
+      return next;
+    });
   }
 
   async function handleRunAiVisibilityProbe() {
@@ -1842,6 +1891,18 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
             <CardHeader>
               <CardTitle>{t("cardAiVisibility")}</CardTitle>
               <CardAction className="flex gap-2">
+                {aiVisibility &&
+                  aiVisibility.groundingMode === "web_grounded" &&
+                  aiVisibility.scorecard.winnableQueries.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBuildFixPlan}
+                      disabled={isBuildingFixPlan || isProbingAiVisibility}
+                    >
+                      {isBuildingFixPlan ? t("preparingFixPlan") : t("prepareFixPlan")}
+                    </Button>
+                  )}
                 {aiVisibility && (
                   <Button
                     variant="outline"
@@ -1877,6 +1938,7 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                 propose them from your site, or type your own (one per line). Each is sampled several times, so
                 this can take a minute.
               </p>
+              {fixPlanError && <p className="text-xs text-amber-300">{fixPlanError}</p>}
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <input
                   type="checkbox"
