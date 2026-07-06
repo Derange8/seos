@@ -109,12 +109,21 @@ async function startNextServer(): Promise<void> {
 // This app never set one, so — confirmed live — pasting into any input
 // (e.g. the LLM API key field on the settings page) silently did nothing
 // on macOS: Cmd+V had no menu item behind it to dispatch the paste
-// command to the focused webContents. A bare "Edit" role is the standard
-// fix; the rest of a typical default menu (File/View/Window) isn't needed
-// for a single-window utility app, but Edit's copy/paste/undo bindings
-// are load-bearing for basic form usability.
+// command to the focused webContents.
+//
+// Also includes a standard macOS app menu (About/Hide/Quit under the app
+// name) — on macOS specifically, `Menu.setApplicationMenu` with only a
+// bare "Edit" entry and no first "app name" menu is a nonstandard menu bar
+// shape; per Electron's own docs, macOS expects the first submenu's role
+// to be "appMenu" (or a menu explicitly named after the app) to behave
+// like an ordinary Mac app. Left as a real (if unconfirmed) suspect for
+// this app's Dock-icon-bouncing-on-launch symptom, alongside the
+// possibility it's unrelated OS-level launch behavior for an unsigned
+// app; adding the standard appMenu role costs nothing and is the
+// documented-correct shape either way.
 function installEditMenu(): void {
   const template: Electron.MenuItemConstructorOptions[] = [
+    { role: "appMenu" },
     {
       label: "Edit",
       submenu: [
