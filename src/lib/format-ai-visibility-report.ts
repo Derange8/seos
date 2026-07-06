@@ -12,6 +12,18 @@ function fmtSignedPct(n: number): string {
   return `${n > 0 ? "+" : ""}${n}%`;
 }
 
+// Human-facing engine name; falls back to the raw id for anything unmapped
+// (e.g. a future engine) rather than hiding it.
+function engineLabel(engine: string): string {
+  const labels: Record<string, string> = {
+    openai: "ChatGPT (OpenAI)",
+    anthropic: "Claude (Anthropic)",
+    deepseek: "DeepSeek",
+    gemini: "Gemini (Google)",
+  };
+  return labels[engine] ?? engine;
+}
+
 // Plain-text export of a project's AI-visibility standing: the latest probe's
 // scorecard, its movement since the previous run, the winnable/contested
 // queries, and the resolved before/after experiments — meant to be pasted into
@@ -36,6 +48,7 @@ export function formatAiVisibilityReport(
 
   sections.push(
     `Seos AI Visibility Report — ${domain}\n` +
+      `Engine: ${engineLabel(run.engine)}\n` +
       `Measured: ${measuredOn} (${grounded ? "live web search" : "model memory only"})\n` +
       `Samples: ${sc.totalSamples} across ${run.queries.length} quer${run.queries.length === 1 ? "y" : "ies"}` +
       (trend.length > 1 ? ` · ${trend.length} runs on record` : "")
@@ -62,7 +75,11 @@ export function formatAiVisibilityReport(
     // Only show cited movement when both runs measured it (see citedComparable);
     // otherwise it'd be a fabricated gain against a parametric baseline.
     if (grounded && d.citedComparable) deltaLines.push(`Cited ${fmtSignedPct(d.citedPctDelta)}`);
-    sections.push(`SINCE LAST RUN (${since})\n  ${deltaLines.join(" · ")}`);
+    // A cross-engine pair isn't comparable — say so instead of showing zeros.
+    const body = d.sameEngine
+      ? `  ${deltaLines.join(" · ")}`
+      : "  Not comparable — the previous run was measured on a different engine.";
+    sections.push(`SINCE LAST RUN (${since})\n${body}`);
   }
 
   // Winnable queries

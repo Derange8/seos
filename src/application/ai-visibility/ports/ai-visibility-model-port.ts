@@ -84,6 +84,11 @@ export interface AiVisibilityModelPort {
   // (e.g. a provider with no web-search tool) must reject, not quietly degrade
   // to parametric — that would be a measurement lie.
   ask(query: string, mode: GroundingMode): Promise<AskResult>;
+  // A stable identifier for the AI engine behind this port (e.g. "openai",
+  // "anthropic"), recorded on the run so measurements are labeled by — and
+  // never compared across — the answer surface that produced them. Async
+  // because the dynamic model resolves it from settings on first use.
+  engineId(): Promise<string>;
   // Does this answer name at least one specific, real platform/product (a
   // brand), as opposed to a generic non-committal answer? Splits OPEN from
   // CONTESTED for platforms not in the target's known-competitor list.

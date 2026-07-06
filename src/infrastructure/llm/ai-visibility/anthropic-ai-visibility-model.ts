@@ -80,6 +80,10 @@ export class AnthropicAiVisibilityModel implements AiVisibilityModelPort {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
+  async engineId(): Promise<string> {
+    return "anthropic";
+  }
+
   async ask(query: string, mode: GroundingMode): Promise<AskResult> {
     // Warm temperature — the probe wants the real spread of answers a user
     // would see (Anthropic's range is 0..1).

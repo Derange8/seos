@@ -28,6 +28,7 @@ describe("PrismaAiVisibilityRunRepository", () => {
       projectId,
       samplesPerQuery: 3,
       groundingMode: "parametric",
+      engine: "anthropic",
       runAt: new Date("2026-07-01"),
       outcomes: [
         { query: "q1", slots: ["OPEN", "CONTESTED", "OPEN"], competitorsMentioned: ["Polymarket"], citedSamples: 0, citations: [] },
@@ -40,6 +41,8 @@ describe("PrismaAiVisibilityRunRepository", () => {
 
     expect(found).not.toBeNull();
     expect(found?.samplesPerQuery).toBe(3);
+    expect(found?.engine).toBe("anthropic"); // engine round-trips
+
     expect(found?.outcomes).toHaveLength(2);
     const q1 = found?.outcomes.find((o) => o.query === "q1");
     expect(q1?.slots).toEqual(["OPEN", "CONTESTED", "OPEN"]);
@@ -53,6 +56,7 @@ describe("PrismaAiVisibilityRunRepository", () => {
         projectId,
         samplesPerQuery: 1,
         groundingMode: "parametric",
+        engine: "openai",
         runAt: new Date("2026-06-01"),
         outcomes: [{ query: "old", slots: ["OPEN"], competitorsMentioned: [], citedSamples: 0, citations: [] }],
       })
@@ -63,6 +67,7 @@ describe("PrismaAiVisibilityRunRepository", () => {
         projectId,
         samplesPerQuery: 1,
         groundingMode: "parametric",
+        engine: "openai",
         runAt: new Date("2026-07-15"),
         outcomes: [{ query: "new", slots: ["MENTIONED"], competitorsMentioned: [], citedSamples: 0, citations: [] }],
       })

@@ -24,6 +24,12 @@ export interface AiVisibilityProbeRunProps {
   // How the whole run was measured. Recorded so a trend never silently
   // compares a parametric run against a web-grounded one (different surfaces).
   groundingMode: GroundingMode;
+  // Which AI engine measured this run (e.g. "openai", "anthropic"). Different
+  // engines are different answer surfaces — a site can be recommended on one
+  // and invisible on another — so runs are labeled with it and a trend/delta
+  // never silently compares across engines. Plain string, not tied to the
+  // settings LlmProvider enum, so the domain doesn't depend on settings.
+  engine: string;
   runAt: Date;
   outcomes: QueryOutcome[];
 }
@@ -37,13 +43,15 @@ export class AiVisibilityProbeRun {
   static create(
     projectId: string,
     samplesPerQuery: number,
-    groundingMode: GroundingMode
+    groundingMode: GroundingMode,
+    engine: string
   ): AiVisibilityProbeRun {
     return new AiVisibilityProbeRun({
       id: crypto.randomUUID(),
       projectId,
       samplesPerQuery,
       groundingMode,
+      engine,
       runAt: new Date(),
       outcomes: [],
     });
@@ -71,6 +79,10 @@ export class AiVisibilityProbeRun {
 
   get groundingMode(): GroundingMode {
     return this.props.groundingMode;
+  }
+
+  get engine(): string {
+    return this.props.engine;
   }
 
   get runAt(): Date {

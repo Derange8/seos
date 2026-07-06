@@ -29,6 +29,7 @@ function run(overrides: Partial<AiVisibilityRunDto> = {}): AiVisibilityRunDto {
     runAt: "2026-07-05T10:00:00.000Z",
     samplesPerQuery: 2,
     groundingMode: "web_grounded",
+    engine: "openai",
     scorecard: scorecard(),
     queries: [
       {
@@ -60,12 +61,36 @@ const experiment = (o: Partial<VisibilityExperimentDto> = {}): VisibilityExperim
 });
 
 describe("formatAiVisibilityReport", () => {
-  it("includes the domain, measurement mode, and scorecard", () => {
+  it("includes the domain, engine, measurement mode, and scorecard", () => {
     const report = formatAiVisibilityReport("acme.com", run(), [], []);
     expect(report).toContain("Seos AI Visibility Report — acme.com");
+    expect(report).toContain("Engine: ChatGPT (OpenAI)");
     expect(report).toContain("live web search");
     expect(report).toContain("Recommended (mentioned): 25%");
     expect(report).toContain("Cited (your domain in AI-search sources): 25%");
+  });
+
+  it("labels a different engine and says the delta isn't comparable across engines", () => {
+    const report = formatAiVisibilityReport(
+      "acme.com",
+      run({
+        engine: "anthropic",
+        delta: {
+          previousRunAt: "2026-07-01T00:00:00.000Z",
+          mentionedPctDelta: 0,
+          openPctDelta: 0,
+          contestedPctDelta: 0,
+          citedPctDelta: 0,
+          citedComparable: false,
+          sameEngine: false,
+          changes: [],
+        },
+      }),
+      [],
+      []
+    );
+    expect(report).toContain("Engine: Claude (Anthropic)");
+    expect(report).toContain("Not comparable — the previous run was measured on a different engine.");
   });
 
   it("reports citation as not measured for a parametric run (never a fake 0%)", () => {
@@ -91,6 +116,7 @@ describe("formatAiVisibilityReport", () => {
           contestedPctDelta: 0,
           citedPctDelta: 25,
           citedComparable: true,
+          sameEngine: true,
           changes: [],
         },
       }),
@@ -114,6 +140,7 @@ describe("formatAiVisibilityReport", () => {
           contestedPctDelta: 0,
           citedPctDelta: 0,
           citedComparable: false,
+          sameEngine: true,
           changes: [],
         },
       }),
@@ -139,6 +166,7 @@ describe("formatAiVisibilityReport", () => {
           contestedPctDelta: 0,
           citedPctDelta: 0,
           citedComparable: false,
+          sameEngine: true,
           changes: [],
         },
       }),

@@ -18,6 +18,10 @@ function domain(value: string): DomainName {
 
 class CapturingModel implements AiVisibilityModelPort {
   lastInput: CitationContentInput | null = null;
+  async engineId(): Promise<string> {
+    return "openai";
+  }
+
   async ask(_query: string, mode: GroundingMode): Promise<AskResult> {
     return { answer: "", citations: [], groundingMode: mode };
   }

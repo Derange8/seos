@@ -702,6 +702,16 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     return n > 0 ? `+${n}` : `${n}`;
   }
 
+  function engineLabel(engine: string): string {
+    const labels: Record<string, string> = {
+      openai: "ChatGPT",
+      anthropic: "Claude",
+      deepseek: "DeepSeek",
+      gemini: "Gemini",
+    };
+    return labels[engine] ?? engine;
+  }
+
   function deltaClass(n: number): string {
     return n > 0 ? "text-green-400" : n < 0 ? "text-red-400" : "text-muted-foreground";
   }
@@ -1992,6 +2002,7 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                     )}
                     <span className="text-muted-foreground">
                       ({aiVisibility.scorecard.totalSamples} samples ·{" "}
+                      {engineLabel(aiVisibility.engine)} ·{" "}
                       {aiVisibility.groundingMode === "web_grounded" ? "web search" : "memory"} ·{" "}
                       {new Date(aiVisibility.runAt).toLocaleString()})
                     </span>

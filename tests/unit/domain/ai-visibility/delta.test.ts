@@ -13,13 +13,15 @@ function oc(query: string, slots: Slot[], citedSamples = 0): QueryOutcome {
 function run(
   outcomes: QueryOutcome[],
   runAt: string,
-  groundingMode: "parametric" | "web_grounded" = "parametric"
+  groundingMode: "parametric" | "web_grounded" = "parametric",
+  engine = "openai"
 ): AiVisibilityProbeRun {
   return AiVisibilityProbeRun.reconstitute({
     id: crypto.randomUUID(),
     projectId: "p1",
     samplesPerQuery: 1,
     groundingMode,
+    engine,
     runAt: new Date(runAt),
     outcomes,
   });
@@ -71,6 +73,22 @@ describe("computeAiVisibilityDelta", () => {
 
     expect(delta.citedComparable).toBe(false);
     expect(delta.citedPctDelta).toBe(0); // forced to 0, not the fabricated +100%
+  });
+
+  it("zeros the whole delta and flags not-comparable across different engines", () => {
+    // Different engines are different answer surfaces — comparing their numbers
+    // is meaningless. Even a real slot change must not surface as a move.
+    const previous = run([oc("q1", ["CONTESTED"], 0)], "2026-07-01", "web_grounded", "openai");
+    const current = run([oc("q1", ["MENTIONED"], 1)], "2026-07-02", "web_grounded", "anthropic");
+
+    const delta = computeAiVisibilityDelta(previous, current);
+
+    expect(delta.sameEngine).toBe(false);
+    expect(delta.mentionedPctDelta).toBe(0);
+    expect(delta.contestedPctDelta).toBe(0);
+    expect(delta.citedPctDelta).toBe(0);
+    expect(delta.citedComparable).toBe(false);
+    expect(delta.changes).toEqual([]); // no cross-engine "CONTESTED → MENTIONED"
   });
 
   it("ignores queries not present in both runs", () => {

@@ -580,6 +580,11 @@ model AiVisibilityProbeRun {
   // Defaults to parametric so rows written before this column existed read
   // correctly as the memory-only measurement they were.
   groundingMode   String   @default("parametric")
+  // Which AI engine measured this run ("openai" | "anthropic" | "deepseek").
+  // Different engines are different answer surfaces, so runs are labeled with
+  // it and never compared across engines. Defaults to "openai": rows written
+  // before this column existed were all measured with OpenAI configured.
+  engine          String   @default("openai")
   // Array of { query, slots: string[], competitorsMentioned: string[],
   // citedSamples: number, citations: {url,title?}[] } — see QueryOutcome.
   // Plain JSON, not type-checked by the DB.

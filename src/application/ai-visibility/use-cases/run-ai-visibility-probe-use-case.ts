@@ -67,7 +67,10 @@ export class RunAiVisibilityProbeUseCase {
     target: ProbeTarget,
     mode: GroundingMode
   ): Promise<AiVisibilityProbeRun> {
-    const run = AiVisibilityProbeRun.create(projectId, this.samplesPerQuery, mode);
+    // Which engine is measuring this run — recorded so the run is labeled by,
+    // and never compared across, its answer surface.
+    const engine = await this.deps.model.engineId();
+    const run = AiVisibilityProbeRun.create(projectId, this.samplesPerQuery, mode, engine);
     let lastError: unknown = null;
 
     for (const query of target.queries) {

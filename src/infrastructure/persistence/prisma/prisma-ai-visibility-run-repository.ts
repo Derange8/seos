@@ -51,6 +51,7 @@ export class PrismaAiVisibilityRunRepository implements AiVisibilityRunRepositor
         projectId: run.projectId,
         samplesPerQuery: run.samplesPerQuery,
         groundingMode: run.groundingMode,
+        engine: run.engine,
         outcomes: run.outcomes.map((o) => ({
           query: o.query,
           slots: [...o.slots],
@@ -75,6 +76,7 @@ export class PrismaAiVisibilityRunRepository implements AiVisibilityRunRepositor
       projectId: row.projectId,
       samplesPerQuery: row.samplesPerQuery,
       groundingMode: toGroundingMode(row.groundingMode),
+      engine: row.engine ?? "openai",
       runAt: row.runAt,
       outcomes: toDomainOutcomes(row.outcomes),
     });
@@ -93,6 +95,7 @@ export class PrismaAiVisibilityRunRepository implements AiVisibilityRunRepositor
         projectId: row.projectId,
         samplesPerQuery: row.samplesPerQuery,
         groundingMode: toGroundingMode(row.groundingMode),
+        engine: row.engine ?? "openai",
         runAt: row.runAt,
         outcomes: toDomainOutcomes(row.outcomes),
       })

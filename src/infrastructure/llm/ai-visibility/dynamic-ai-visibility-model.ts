@@ -35,6 +35,7 @@ function createModelFor(provider: LlmProvider, apiKey: string, model: string | n
         model: model ?? DEEPSEEK_DEFAULT_MODEL,
         baseUrl: DEEPSEEK_API_URL,
         supportsWebSearch: false,
+        engineId: "deepseek",
       });
   }
 }
@@ -67,6 +68,13 @@ export class DynamicAiVisibilityModel implements AiVisibilityModelPort {
       })();
     }
     return this.resolved;
+  }
+
+  async engineId(): Promise<string> {
+    // The configured provider IS the engine that measures this run. Resolve the
+    // concrete model (which caches its own engineId) rather than re-reading
+    // settings, so this agrees with whatever ask() actually dispatched to.
+    return (await this.resolve()).engineId();
   }
 
   async ask(query: string, mode: GroundingMode): Promise<AskResult> {

@@ -46,6 +46,10 @@ interface Options {
   // The web-search-enabled model to use for grounded asks (the default chat
   // model may not support the web_search tool). Only used in web_grounded mode.
   webSearchModel?: string;
+  // Stable engine identifier recorded on runs. This class backs both real
+  // OpenAI and the OpenAI-compatible DeepSeek endpoint, so it's injected rather
+  // than hardcoded ("openai" vs "deepseek").
+  engineId?: string;
   timeoutMs?: number;
 }
 
@@ -83,6 +87,7 @@ export class OpenAiAiVisibilityModel implements AiVisibilityModelPort {
   private readonly timeoutMs: number;
   private readonly supportsWebSearch: boolean;
   private readonly webSearchModel: string;
+  private readonly engine: string;
 
   constructor(options: Options) {
     this.apiKey = options.apiKey;
@@ -91,6 +96,11 @@ export class OpenAiAiVisibilityModel implements AiVisibilityModelPort {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.supportsWebSearch = options.supportsWebSearch ?? false;
     this.webSearchModel = options.webSearchModel ?? DEFAULT_WEB_SEARCH_MODEL;
+    this.engine = options.engineId ?? "openai";
+  }
+
+  async engineId(): Promise<string> {
+    return this.engine;
   }
 
   async ask(query: string, mode: GroundingMode): Promise<AskResult> {

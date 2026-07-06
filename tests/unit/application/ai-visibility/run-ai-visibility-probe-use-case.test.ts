@@ -28,6 +28,10 @@ const ANSWERS: Record<string, string> = {
 class FakeModel implements AiVisibilityModelPort {
   judgeCalls: string[] = [];
   askModes: GroundingMode[] = [];
+  async engineId(): Promise<string> {
+    return "openai";
+  }
+
   async ask(query: string, mode: GroundingMode): Promise<AskResult> {
     this.askModes.push(mode);
     return { answer: ANSWERS[query] ?? "", citations: [], groundingMode: mode };

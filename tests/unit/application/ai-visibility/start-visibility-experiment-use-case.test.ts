@@ -10,6 +10,7 @@ function runWith(query: string): AiVisibilityProbeRun {
     projectId: "p1",
     samplesPerQuery: 2,
     groundingMode: "parametric",
+    engine: "openai",
     runAt: new Date("2026-07-01"),
     outcomes: [{ query, slots: ["CONTESTED", "CONTESTED"], competitorsMentioned: ["Polymarket"], citedSamples: 0, citations: [] }],
   });

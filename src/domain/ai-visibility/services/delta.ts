@@ -27,6 +27,11 @@ export interface AiVisibilityDelta {
   // citedComparable is false rather than reading citedPctDelta.
   citedPctDelta: number;
   citedComparable: boolean;
+  // False when the two runs were measured by different engines (e.g. an OpenAI
+  // run vs an Anthropic run). Those are different answer surfaces — comparing
+  // their percentages is meaningless — so callers should suppress the delta
+  // and tell the user the runs aren't comparable rather than show noise.
+  sameEngine: boolean;
   changes: AiVisibilitySlotChange[];
 }
 
@@ -48,19 +53,26 @@ export function computeAiVisibilityDelta(
     if (from !== to) changes.push({ query: o.query, from, to });
   }
 
-  // Citation is only comparable when both ends actually measured it (both
-  // web-grounded). Otherwise report 0 movement and flag it not-comparable so
-  // a parametric baseline never fabricates a citation gain.
+  // Different engines are different answer surfaces; comparing their numbers is
+  // meaningless. When the runs disagree on engine, the whole delta is zeroed and
+  // flagged — the slot `changes` list is also dropped (a "CONTESTED → OPEN"
+  // across engines isn't a real move).
+  const sameEngine = previous.engine === current.engine;
+
+  // Citation is comparable only when both ends measured it (both web-grounded)
+  // AND on the same engine. Otherwise a parametric baseline (or a cross-engine
+  // pair) would fabricate a citation gain.
   const citedComparable =
-    previous.groundingMode === "web_grounded" && current.groundingMode === "web_grounded";
+    sameEngine && previous.groundingMode === "web_grounded" && current.groundingMode === "web_grounded";
 
   return {
     previousRunAt: previous.runAt.toISOString(),
-    mentionedPctDelta: curr.mentionedPct - prev.mentionedPct,
-    openPctDelta: curr.openPct - prev.openPct,
-    contestedPctDelta: curr.contestedPct - prev.contestedPct,
+    mentionedPctDelta: sameEngine ? curr.mentionedPct - prev.mentionedPct : 0,
+    openPctDelta: sameEngine ? curr.openPct - prev.openPct : 0,
+    contestedPctDelta: sameEngine ? curr.contestedPct - prev.contestedPct : 0,
     citedPctDelta: citedComparable ? curr.citedPct - prev.citedPct : 0,
     citedComparable,
-    changes,
+    sameEngine,
+    changes: sameEngine ? changes : [],
   };
 }

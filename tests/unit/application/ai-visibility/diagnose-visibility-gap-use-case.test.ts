@@ -20,6 +20,10 @@ function domain(value: string): DomainName {
 
 class CapturingModel implements AiVisibilityModelPort {
   lastInput: VisibilityGapInput | null = null;
+  async engineId(): Promise<string> {
+    return "openai";
+  }
+
   async ask(_query: string, mode: GroundingMode): Promise<AskResult> {
     return { answer: "", citations: [], groundingMode: mode };
   }
@@ -64,6 +68,7 @@ describe("DiagnoseVisibilityGapUseCase", () => {
       projectId: project.id,
       samplesPerQuery: 2,
       groundingMode: "parametric",
+      engine: "openai",
       runAt: new Date(),
       outcomes: [{ query: "best prediction market", slots: ["CONTESTED"], competitorsMentioned: ["Polymarket", "Augur"], citedSamples: 0, citations: [] }],
     });

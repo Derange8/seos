@@ -14,6 +14,7 @@ function laterRun(
     projectId: "p1",
     samplesPerQuery: 2,
     groundingMode,
+    engine: "openai",
     runAt: new Date(Date.now() + 86_400_000),
     outcomes,
   });
@@ -97,6 +98,7 @@ describe("ResolveVisibilityExperimentsUseCase", () => {
       projectId: "p1",
       samplesPerQuery: 1,
       groundingMode: "parametric",
+      engine: "openai",
       runAt: new Date("2026-06-01"),
       outcomes: [{ query: "q1", slots: ["MENTIONED"], competitorsMentioned: [], citedSamples: 0, citations: [] }],
     });

@@ -21,6 +21,7 @@ function run(
     projectId: "p1",
     samplesPerQuery: 2,
     groundingMode,
+    engine: "openai",
     runAt: new Date(),
     outcomes,
   });

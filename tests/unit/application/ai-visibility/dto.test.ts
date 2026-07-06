@@ -9,6 +9,7 @@ describe("toAiVisibilityRunDto", () => {
       projectId: "project-1",
       samplesPerQuery: 2,
       groundingMode: "web_grounded",
+      engine: "openai",
       runAt: new Date("2026-07-03T00:00:00.000Z"),
       outcomes: [
         { query: "q-open", slots: ["OPEN", "OPEN"], competitorsMentioned: [], citedSamples: 1, citations: [{ url: "https://acme.com/a" }] },
@@ -46,6 +47,7 @@ describe("toAiVisibilityTrendDto", () => {
       projectId: "project-1",
       samplesPerQuery: slots.length,
       groundingMode: "parametric",
+      engine: "openai",
       runAt: new Date(runAt),
       outcomes: [{ query: "q", slots, competitorsMentioned: [], citedSamples: 0, citations: [] }],
     });

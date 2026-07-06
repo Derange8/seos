@@ -35,6 +35,8 @@ export interface AiVisibilityRunDto {
   // How this run was measured — the UI reads citation numbers differently for
   // a parametric run (no web search) vs a web_grounded one.
   groundingMode: string;
+  // Which AI engine measured this run ("openai" | "anthropic" | "deepseek").
+  engine: string;
   scorecard: AiVisibilityScorecard;
   queries: AiVisibilityQueryDto[];
   // Movement vs the previous run, when one exists — the re-measure payoff.
@@ -100,6 +102,7 @@ export function toAiVisibilityRunDto(
     runAt: run.runAt.toISOString(),
     samplesPerQuery: run.samplesPerQuery,
     groundingMode: run.groundingMode,
+    engine: run.engine,
     scorecard: buildScorecard(run.outcomes),
     delta: previous ? computeAiVisibilityDelta(previous, run) : null,
     queries: run.outcomes.map((o) => ({
