@@ -13,6 +13,21 @@ extraResources:
   - from: prisma/migrations
     to: prisma/migrations
 
+# Real, confirmed electron-builder behavior: when a directory copied via
+# extraResources itself contains a "node_modules" folder, electron-builder
+# silently drops that inner node_modules entirely rather than copying it
+# verbatim — it always routes any "node_modules" it finds through its own
+# dependency-collection/pruning logic (meant for the project's OWN
+# dependency tree, not an arbitrary bundled one), and .next/standalone's
+# node_modules isn't reachable from that logic since it isn't referenced
+# by this project's own package.json. Confirmed by inspecting a real
+# packaged .app: Resources/standalone/ only ever contained package.json +
+# server.js, node_modules missing every time, even with an added
+# `filter: ["**/*"]` (had no effect). Fixed by copying it ourselves after
+# packaging via afterPack — the one hook that runs once electron-builder's
+# own copy/prune step is fully done.
+afterPack: scripts/after-pack.cjs
+
 # better-sqlite3's compiled .node binary can't be loaded from inside an
 # asar archive — unpack it (and anything that requires it transitively)
 # so Node's native module loader can find it on the real filesystem.

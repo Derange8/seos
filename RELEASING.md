@@ -96,25 +96,104 @@ anonymous feed request cannot see at all (drafts aren't returned by
 
 ## Verifying the update actually works
 
-The network/version-detection path was verified on 2026-07-06 (see above) by
-fetching the real anonymous feed URL and confirming a newer version resolves
-correctly with a downloadable asset. **What's still unverified is the actual
-in-app experience** — the GUI dialog appearing, the download progress, the
-"restart to install" flow — because the sandboxed environment this was
-checked from cannot launch a macOS GUI app (`open`/direct-exec produced no
-running process or logs; not a code problem, an environment limitation).
+**Fully verified end-to-end on a real machine on 2026-07-06.** Installed a
+real packaged `v0.1.1` build, launched it, and confirmed via
+`~/Library/Logs/Seos/main.log` (with `autoUpdater.logger = log` wired up —
+see the fix below, without it electron-updater's own events go nowhere
+since a packaged GUI app has no attached console) that it: checked GitHub,
+found `v0.1.2`, downloaded the real installer asset, and got as far as
+attempting to install it. Three real, previously-unknown packaging bugs
+were found and fixed in the process — **the app could not even launch
+successfully before these fixes**:
 
-To close that last piece on a real machine:
+### Bug 1: packaged app couldn't start at all — `standalone/node_modules` was missing
 
-1. Publish a release at version `X.Y.Z` per the steps above (checking for
-   the duplicate-draft bug above).
-2. Install that build on a real machine.
-3. Bump to `X.Y.Z+1` and publish again (same duplicate-draft check).
-4. Relaunch the installed `X.Y.Z` app and confirm `electron-log`'s
-   `main.log` (`~/Library/Logs/Seos/main.log` on macOS) shows
-   electron-updater finding, downloading, and prompting to install the new
-   version — then confirm the relaunched app actually reports the new
-   version.
+`electron-builder`'s `extraResources` copy step silently drops an inner
+`node_modules` folder found inside a copied directory — confirmed by
+inspecting a real packaged `.app`: `Resources/standalone/` only ever
+contained `package.json` + `server.js`, `node_modules` missing every
+time, even after adding an explicit `filter: ["**/*"]` (no effect). Without
+it, `standalone/server.js`'s own `require("next")` throws
+`MODULE_NOT_FOUND` and the Next.js server inside the packaged app can
+never start — every launch just failed after a 20s timeout with no
+useful error surfaced anywhere. **Fixed** via a new `afterPack` hook
+(`scripts/after-pack.cjs`) that copies `.next/standalone/node_modules`
+into the packaged app itself, once electron-builder's own copy/prune step
+is done.
+
+### Bug 2: even after fixing #1, spawning the server never actually worked
+
+`electron/main.ts` spawns the Next.js server via
+`spawn(process.execPath, [...])`. In dev, `process.execPath` is the system
+`node` binary — fine. **In a packaged app, `process.execPath` IS the
+Electron binary itself** — so the spawned "server" process was actually
+launching a second full Electron instance, not running `server.js` as a
+plain Node script, and the real server never came up (still a 20s
+timeout, still no evidence of *why* in the logs). **Fixed** by adding
+`ELECTRON_RUN_AS_NODE: "1"` to the spawned process's env — this is the
+documented way to make Electron's own binary behave as a plain Node
+runtime for a spawned child process.
+
+### Bug 3: server started, but every page loaded with no CSS/JS at all
+
+Next.js's own standalone-output docs state static assets are deliberately
+**not** included in `.next/standalone` (kept out to shrink it) —
+`.next/static` and `public/` must be copied in manually alongside it. This
+codebase's packaging never did that, so `/_next/static/*` and public
+asset requests all 404'd — the app "worked" (server up, HTML returned)
+but rendered as unstyled raw text. **Fixed** in the same `afterPack` hook:
+it now also copies `.next/static` → `standalone/.next/static` and
+`public/` → `standalone/public`.
+
+### Bug 4 (a gap, not a defect): the update-check itself was invisible in the log
+
+`electron-updater` logs to plain `console` by default, which goes nowhere
+useful in a packaged GUI app (no attached terminal) — so there was
+previously no way to tell from `main.log` whether the update check ran at
+all, found nothing, or errored. **Fixed** by wiring
+`autoUpdater.logger = log` (the existing `electron-log` instance already
+used elsewhere in `main.ts`) plus explicit listeners on
+`checking-for-update`/`update-available`/`update-not-available`/`error`/
+`download-progress`/`update-downloaded`.
+
+### The one remaining, expected limitation: unsigned installs can't self-update
+
+With all four fixes in place, a real `v0.1.1` install correctly found,
+downloaded, and attempted to install `v0.1.2` — and then hit a real macOS
+Gatekeeper rejection at the final install step:
+
+```
+Error: Code signature at URL file:///.../Seos.app/ did not pass validation:
+kodda kaynak yok ama imza olması gerektiğini belirtiyor
+```
+
+This is **expected, not a bug**: macOS's native updater mechanism
+(Squirrel.Mac, which electron-updater uses under the hood on macOS)
+requires the old and new app bundles to have a valid, matching code
+signature before it will swap them in place — an unsigned app fails this
+check by design, regardless of how correct everything upstream of it is.
+Code signing (an Apple Developer ID certificate, $99/yr program
+membership) remains the same deliberate, already-scoped-out item it was
+before this session — "out of scope until public distribution." **The
+practical takeaway**: right now, a friend who installs a build can be
+told a new version exists (the app-side detection genuinely works), but
+they'll need to manually download and reinstall the new DMG themselves
+until code signing is added — auto-install won't complete on its own.
+
+### Also fixed in the same pass: local dev/test breakage after building for distribution
+
+`electron-builder`'s own `npmRebuild: true` step rebuilds the root
+`node_modules/better-sqlite3` against **Electron's** Node ABI as a side
+effect of packaging — which then breaks `npm test`/`next dev` locally
+(they use the system Node's own, different ABI) until it's rebuilt back.
+`electron:dev` already had a `postelectron:dev` script for this; the same
+was missing for `electron:dist`/`electron:dist:publish` and has been
+added (`postelectron:dist`/`postelectron:dist:publish`, both just
+`npm rebuild better-sqlite3`). If tests ever fail with an
+`ERR_DLOPEN_FAILED`/`NODE_MODULE_VERSION` mismatch after running a dist
+build directly (bypassing npm's post-script convention, e.g. calling
+`electron-builder` directly rather than via `npm run`), that's this —
+run `npm rebuild better-sqlite3` to fix it.
 
 ## Local build sanity check (no publish, no GH_TOKEN)
 

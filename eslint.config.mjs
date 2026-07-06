@@ -16,6 +16,15 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
+  {
+    // electron-builder loads hook scripts (afterPack, etc.) via require()
+    // itself — CommonJS is the format it expects, not a stylistic choice
+    // this file gets to opt out of like the rest of the codebase's ESM.
+    files: ["scripts/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

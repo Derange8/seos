@@ -81,6 +81,15 @@ async function startNextServer(): Promise<void> {
     HOSTNAME,
     DATABASE_URL: `file:${dbPath}`,
     CREDENTIAL_ENCRYPTION_KEY: ensureCredentialEncryptionKey(userDataDir),
+    // Without this, spawning process.execPath in a packaged app launches a
+    // second full Electron/GUI process (execPath IS the Electron binary
+    // once packaged, unlike in dev where it's the system node binary) —
+    // it never runs server.js as a plain Node script, so the server this
+    // is supposed to start never actually comes up. Confirmed via a real
+    // packaged build: waitForServerReady always timed out at exactly
+    // 20000ms with zero server-side logs, because nothing was ever
+    // actually listening on PORT.
+    ELECTRON_RUN_AS_NODE: "1",
   };
 
   serverProcess = spawn(process.execPath, [path.join(standaloneDir, "server.js")], {
@@ -116,6 +125,21 @@ app.whenReady().then(async () => {
   try {
     await startNextServer();
     createWindow();
+
+    // electron-updater logs to plain console by default, which goes
+    // nowhere useful in a packaged GUI app (no attached terminal) — wiring
+    // it into electron-log is what actually makes checking/available/
+    // not-available/error events show up in main.log at all. Without
+    // this, "did the update check even run" was previously unanswerable
+    // from the log alone.
+    autoUpdater.logger = log;
+    autoUpdater.on("checking-for-update", () => log.info("Auto-update: checking for update"));
+    autoUpdater.on("update-available", (info) => log.info("Auto-update: update available", info));
+    autoUpdater.on("update-not-available", (info) => log.info("Auto-update: no update available", info));
+    autoUpdater.on("error", (error) => log.error("Auto-update: error", error));
+    autoUpdater.on("download-progress", (progress) => log.info("Auto-update: download progress", progress));
+    autoUpdater.on("update-downloaded", (info) => log.info("Auto-update: update downloaded", info));
+
     autoUpdater.checkForUpdatesAndNotify().catch((error) => log.error("Auto-update check failed", error));
   } catch (error) {
     log.error("Failed to start Seos", error);
