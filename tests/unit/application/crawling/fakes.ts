@@ -159,6 +159,8 @@ export function emptyParsedContent(overrides: Partial<ParsedPageContent> = {}): 
     links: [],
     faqs: [],
     hasStructuredData: false,
+    structuredDataTypes: [],
+    hasInvalidStructuredData: false,
     imagesMissingAltCount: 0,
     mixedContentCount: 0,
     h1Count: 0,

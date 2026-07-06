@@ -63,6 +63,8 @@ describe("selectSitemapEntries", () => {
         faqs: [],
         responseTimeMs: null,
         hasStructuredData: false,
+        structuredDataTypes: [],
+        hasInvalidStructuredData: false,
         imagesMissingAltCount: 0,
         redirectChain: [],
         mixedContentCount: 0,

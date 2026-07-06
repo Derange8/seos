@@ -99,6 +99,12 @@ model Page {
   // Whether the page already ships valid JSON-LD — feeds the
   // missing-structured-data audit rule.
   hasStructuredData           Boolean        @default(false)
+  // Every "@type" found across the page's valid JSON-LD blocks, as a JSON
+  // array of strings — feeds the unrecognized-structured-data-type rule.
+  structuredDataTypes         Json           @default("[]")
+  // Whether a JSON-LD block on the page failed to parse as JSON — feeds
+  // the invalid-structured-data audit rule.
+  hasInvalidStructuredData    Boolean        @default(false)
   // Count of <img> elements with no alt attribute — feeds the
   // missing-image-alt audit rule.
   imagesMissingAltCount       Int            @default(0)

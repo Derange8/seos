@@ -31,6 +31,14 @@ export interface PageAttributes {
   // ParsedPageContent.hasStructuredData). Feeds the missing-structured-data
   // rule.
   hasStructuredData?: boolean;
+  // Every "@type" found across the page's valid JSON-LD blocks (see
+  // ParsedPageContent.structuredDataTypes). Feeds the
+  // unrecognized-structured-data-type rule.
+  structuredDataTypes?: readonly string[];
+  // Whether a JSON-LD block on the page failed to parse (see
+  // ParsedPageContent.hasInvalidStructuredData). Feeds the
+  // invalid-structured-data rule.
+  hasInvalidStructuredData?: boolean;
   // Count of <img> elements with no alt attribute (see
   // ParsedPageContent.imagesMissingAltCount). Feeds the missing-image-alt
   // rule.
@@ -124,6 +132,8 @@ export class Page {
       faqs: attributes.faqs ?? [],
       responseTimeMs: attributes.responseTimeMs ?? null,
       hasStructuredData: attributes.hasStructuredData ?? false,
+      structuredDataTypes: attributes.structuredDataTypes ?? [],
+      hasInvalidStructuredData: attributes.hasInvalidStructuredData ?? false,
       imagesMissingAltCount: attributes.imagesMissingAltCount ?? 0,
       redirectChain: attributes.redirectChain ?? [],
       mixedContentCount: attributes.mixedContentCount ?? 0,
@@ -203,6 +213,14 @@ export class Page {
 
   get hasStructuredData(): boolean {
     return this.props.hasStructuredData;
+  }
+
+  get structuredDataTypes(): readonly string[] {
+    return this.props.structuredDataTypes;
+  }
+
+  get hasInvalidStructuredData(): boolean {
+    return this.props.hasInvalidStructuredData;
   }
 
   get imagesMissingAltCount(): number {

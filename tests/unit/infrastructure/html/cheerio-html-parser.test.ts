@@ -146,6 +146,76 @@ describe("CheerioHtmlParser", () => {
     });
   });
 
+  describe("structuredDataTypes", () => {
+    it("collects a single @type from one JSON-LD block", () => {
+      const html = `<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization"}</script>`;
+      expect(parser.parse(html, baseUrl).structuredDataTypes).toEqual(["Organization"]);
+    });
+
+    it("collects @type from every JSON-LD block on the page", () => {
+      const html = `
+        <script type="application/ld+json">{"@type":"Organization"}</script>
+        <script type="application/ld+json">{"@type":"BreadcrumbList"}</script>
+      `;
+      expect(parser.parse(html, baseUrl).structuredDataTypes).toEqual(["Organization", "BreadcrumbList"]);
+    });
+
+    it("collects @type from an array of nodes", () => {
+      const html = `<script type="application/ld+json">[{"@type":"Organization"},{"@type":"WebSite"}]</script>`;
+      expect(parser.parse(html, baseUrl).structuredDataTypes).toEqual(["Organization", "WebSite"]);
+    });
+
+    it("collects @type from nodes nested under @graph", () => {
+      const html = `<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization"},{"@type":"WebSite"}]}</script>`;
+      expect(parser.parse(html, baseUrl).structuredDataTypes).toEqual(["Organization", "WebSite"]);
+    });
+
+    it("collects every value when @type itself is an array", () => {
+      const html = `<script type="application/ld+json">{"@type":["Product","Thing"]}</script>`;
+      expect(parser.parse(html, baseUrl).structuredDataTypes).toEqual(["Product", "Thing"]);
+    });
+
+    it("is empty when there is no structured data", () => {
+      expect(parser.parse("<body><p>Nothing here.</p></body>", baseUrl).structuredDataTypes).toEqual([]);
+    });
+
+    it("does not include types from a malformed block", () => {
+      const html = `<script type="application/ld+json">{not valid json}</script>`;
+      expect(parser.parse(html, baseUrl).structuredDataTypes).toEqual([]);
+    });
+  });
+
+  describe("hasInvalidStructuredData", () => {
+    it("is true when a JSON-LD block fails to parse", () => {
+      const html = `<script type="application/ld+json">{not valid json}</script>`;
+      expect(parser.parse(html, baseUrl).hasInvalidStructuredData).toBe(true);
+    });
+
+    it("is false when every JSON-LD block parses fine", () => {
+      const html = `<script type="application/ld+json">{"@type":"Organization"}</script>`;
+      expect(parser.parse(html, baseUrl).hasInvalidStructuredData).toBe(false);
+    });
+
+    it("is false when there is no structured data at all", () => {
+      expect(parser.parse("<body><p>Nothing here.</p></body>", baseUrl).hasInvalidStructuredData).toBe(false);
+    });
+
+    it("is true if even one of several blocks is malformed", () => {
+      const html = `
+        <script type="application/ld+json">{"@type":"Organization"}</script>
+        <script type="application/ld+json">{not valid}</script>
+      `;
+      const result = parser.parse(html, baseUrl);
+      expect(result.hasInvalidStructuredData).toBe(true);
+      expect(result.structuredDataTypes).toEqual(["Organization"]);
+    });
+
+    it("is false for an empty JSON-LD block (not treated as invalid, just absent)", () => {
+      const html = `<script type="application/ld+json"></script>`;
+      expect(parser.parse(html, baseUrl).hasInvalidStructuredData).toBe(false);
+    });
+  });
+
   describe("imagesMissingAltCount", () => {
     it("counts images with no alt attribute at all", () => {
       const html = `<body><img src="a.png"><img src="b.png" alt="A photo"><img src="c.png"></body>`;

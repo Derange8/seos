@@ -89,23 +89,59 @@ function extractFaqs($: cheerio.CheerioAPI): Faq[] {
   return faqs;
 }
 
-// Presence only: a script tag that parses as JSON counts, regardless of
-// shape — actually validating against schema.org types is a much bigger
-// scope than "does this page have any structured data at all."
-function detectStructuredData($: cheerio.CheerioAPI): boolean {
-  let found = false;
+// Pulls every "@type" out of a parsed JSON-LD value — handles the plain
+// single-object form, an array of objects (multiple blocks describing
+// different things), and "@graph" (a common pattern bundling several
+// typed nodes under one script tag). "@type" itself can be a string or an
+// array of strings (a node can claim more than one type at once), so both
+// shapes are flattened into the same string list.
+function extractTypes(node: unknown, out: string[]): void {
+  if (Array.isArray(node)) {
+    for (const item of node) extractTypes(item, out);
+    return;
+  }
+  if (node === null || typeof node !== "object") return;
+
+  const record = node as Record<string, unknown>;
+  const type = record["@type"];
+  if (typeof type === "string") {
+    out.push(type);
+  } else if (Array.isArray(type)) {
+    for (const t of type) {
+      if (typeof t === "string") out.push(t);
+    }
+  }
+
+  if (Array.isArray(record["@graph"])) {
+    extractTypes(record["@graph"], out);
+  }
+}
+
+// Structured data detection: every <script type="application/ld+json">
+// tag is parsed as JSON. A tag that fails to parse is recorded as
+// "invalid" (feeds invalid-structured-data-rule) rather than silently
+// treated as if it weren't there — a page author who tried to add JSON-LD
+// and got the syntax wrong should be told, not left thinking nothing is
+// wrong. Valid tags contribute their "@type" value(s) (feeds
+// missing-structured-data / unrecognized-structured-data-type rules).
+function detectStructuredData(
+  $: cheerio.CheerioAPI
+): { types: string[]; hasInvalid: boolean } {
+  const types: string[] = [];
+  let hasInvalid = false;
+
   $('script[type="application/ld+json"]').each((_index, element) => {
-    if (found) return;
     const raw = $(element).contents().text().trim();
     if (raw.length === 0) return;
     try {
-      JSON.parse(raw);
-      found = true;
+      const parsed: unknown = JSON.parse(raw);
+      extractTypes(parsed, types);
     } catch {
-      // malformed JSON-LD doesn't count as "has structured data"
+      hasInvalid = true;
     }
   });
-  return found;
+
+  return { types, hasInvalid };
 }
 
 // alt="" is a deliberate accessibility signal ("decorative image, skip me")
@@ -194,6 +230,8 @@ export class CheerioHtmlParser implements HtmlParserPort {
       if (resolved) links.add(resolved);
     });
 
+    const structuredData = detectStructuredData($);
+
     return {
       title,
       metaDescription,
@@ -204,7 +242,9 @@ export class CheerioHtmlParser implements HtmlParserPort {
       contentExcerpt,
       links: Array.from(links),
       faqs: extractFaqs($),
-      hasStructuredData: detectStructuredData($),
+      hasStructuredData: structuredData.types.length > 0,
+      structuredDataTypes: structuredData.types,
+      hasInvalidStructuredData: structuredData.hasInvalid,
       imagesMissingAltCount: countImagesMissingAlt($),
       mixedContentCount: countMixedContentResources($, baseUrl),
       h1Count: $("h1").length,

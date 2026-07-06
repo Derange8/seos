@@ -44,6 +44,13 @@ function toDomainExternalScriptOrigins(raw: unknown): string[] {
   return raw.filter((entry): entry is string => typeof entry === "string");
 }
 
+// Same defensive coercion again — structuredDataTypes is also a plain
+// JSON column.
+function toDomainStructuredDataTypes(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((entry): entry is string => typeof entry === "string");
+}
+
 function toDomain(row: PrismaPageRow & { links: PrismaLinkRow[] }): Page {
   const props: PageProps = {
     id: row.id,
@@ -61,6 +68,8 @@ function toDomain(row: PrismaPageRow & { links: PrismaLinkRow[] }): Page {
     faqs: toDomainFaqs(row.faqs),
     responseTimeMs: row.responseTimeMs,
     hasStructuredData: row.hasStructuredData,
+    structuredDataTypes: toDomainStructuredDataTypes(row.structuredDataTypes),
+    hasInvalidStructuredData: row.hasInvalidStructuredData,
     imagesMissingAltCount: row.imagesMissingAltCount,
     redirectChain: toDomainRedirectChain(row.redirectChain),
     mixedContentCount: row.mixedContentCount,
@@ -106,6 +115,8 @@ export class PrismaPageRepository implements PageRepositoryPort {
       faqs: page.faqs.map((faq) => ({ question: faq.question, answer: faq.answer })),
       responseTimeMs: page.responseTimeMs,
       hasStructuredData: page.hasStructuredData,
+      structuredDataTypes: page.structuredDataTypes,
+      hasInvalidStructuredData: page.hasInvalidStructuredData,
       imagesMissingAltCount: page.imagesMissingAltCount,
       redirectChain: page.redirectChain,
       mixedContentCount: page.mixedContentCount,

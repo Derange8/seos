@@ -30,6 +30,16 @@ export interface ParsedPageContent {
   // @type or whether it validates against schema.org. Feeds the
   // missing-structured-data audit rule.
   hasStructuredData: boolean;
+  // Every "@type" value found across all valid JSON-LD blocks (including
+  // inside "@graph"), e.g. ["Organization", "BreadcrumbList"]. Feeds the
+  // unrecognized-structured-data-type audit rule (checks each against a
+  // known schema.org type list).
+  structuredDataTypes: readonly string[];
+  // Whether at least one <script type="application/ld+json"> tag on the
+  // page failed to parse as JSON — a real authoring mistake, distinct from
+  // having no structured data at all. Feeds the invalid-structured-data
+  // audit rule.
+  hasInvalidStructuredData: boolean;
   // Count of <img> elements with no alt attribute at all — alt="" is a
   // deliberate "decorative, skip me" signal per WAI-ARIA and doesn't count.
   // Feeds the missing-image-alt audit rule.

@@ -22,6 +22,8 @@ import { noindexRule } from "@/domain/auditing/services/rules/noindex-rule";
 import { orphanPageRule } from "@/domain/auditing/services/rules/orphan-page-rule";
 import { cspBlocksScriptRule } from "@/domain/auditing/services/rules/csp-blocks-script-rule";
 import { clientSideOnlyContentRule } from "@/domain/auditing/services/rules/client-side-only-content-rule";
+import { invalidStructuredDataRule } from "@/domain/auditing/services/rules/invalid-structured-data-rule";
+import { unrecognizedStructuredDataTypeRule } from "@/domain/auditing/services/rules/unrecognized-structured-data-type-rule";
 
 // The plugin registry — adding a rule means writing one AuditRule and
 // listing it here, nothing else in the engine needs to change.
@@ -49,4 +51,6 @@ export const DEFAULT_AUDIT_RULES: readonly AuditRule[] = [
   orphanPageRule,
   cspBlocksScriptRule,
   clientSideOnlyContentRule,
+  invalidStructuredDataRule,
+  unrecognizedStructuredDataTypeRule,
 ];

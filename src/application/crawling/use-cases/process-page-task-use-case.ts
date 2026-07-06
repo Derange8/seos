@@ -162,6 +162,8 @@ export class ProcessPageTaskUseCase {
       faqs: parsed.faqs,
       responseTimeMs: fetched.responseTimeMs,
       hasStructuredData: parsed.hasStructuredData,
+      structuredDataTypes: parsed.structuredDataTypes,
+      hasInvalidStructuredData: parsed.hasInvalidStructuredData,
       imagesMissingAltCount: parsed.imagesMissingAltCount,
       redirectChain: fetched.redirectChain,
       mixedContentCount: parsed.mixedContentCount,
