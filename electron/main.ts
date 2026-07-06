@@ -21,6 +21,19 @@ const migrationsDir = path.join(resourcesDir, "prisma/migrations");
 let serverProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 
+// Diagnostic: surface any otherwise-silent early crash. The app was dying
+// within ~1-3s of launch writing nothing to main.log — meaning it never
+// reached the log.error in app.whenReady's catch, i.e. it crashed before
+// (or during) whenReady. These catch a top-level throw and write it where
+// we can actually read it.
+log.info("main.cjs loaded; app.isPackaged =", app.isPackaged, "resourcesDir =", resourcesDir);
+process.on("uncaughtException", (err) => {
+  log.error("uncaughtException", err);
+});
+process.on("unhandledRejection", (reason) => {
+  log.error("unhandledRejection", reason);
+});
+
 // Generated once per install, persisted in userData — never bundled into
 // the shipped app (a baked-in key would be the same for every install,
 // defeating the point of encrypting credentials at rest). The on-disk file
