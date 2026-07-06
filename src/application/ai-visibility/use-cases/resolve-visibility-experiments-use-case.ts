@@ -21,7 +21,16 @@ export class ResolveVisibilityExperimentsUseCase {
       const outcome = run.outcomes.find((o) => o.query === experiment.query);
       if (!outcome) continue;
 
-      experiment.resolve(dominantSlot(outcome.slots), run.runAt);
+      // Resolve on both axes: the mention slot and the citation reading from
+      // this (post-action) run. groundingMode gates whether citation is even
+      // comparable — a parametric re-measure resolves the slot but leaves
+      // citation NA (see classifyCitationMovement).
+      experiment.resolve(
+        dominantSlot(outcome.slots),
+        run.runAt,
+        run.groundingMode === "web_grounded",
+        outcome.citedSamples > 0
+      );
       await this.deps.experimentRepository.save(experiment);
     }
   }

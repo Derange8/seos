@@ -601,10 +601,18 @@ model VisibilityExperiment {
   query         String
   baselineSlot  String
   baselineRunAt DateTime
+  // Citation axis at baseline (Faz 2). baselineGrounded defaults false so
+  // experiments opened before web-grounded probing read as "citation not
+  // observable", never a fabricated later win.
+  baselineGrounded Boolean @default(false)
+  baselineCited    Boolean @default(false)
   actionAt      DateTime  @default(now())
   status        String    @default("OPEN")
   outcomeSlot   String?
   outcomeRunAt  DateTime?
+  // Citation axis at outcome — null until resolved, mirroring outcomeSlot.
+  outcomeGrounded Boolean?
+  outcomeCited    Boolean?
 
   @@index([projectId])
   @@map("visibility_experiments")

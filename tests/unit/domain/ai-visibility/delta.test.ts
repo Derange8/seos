@@ -4,10 +4,10 @@ import { AiVisibilityProbeRun } from "@/domain/ai-visibility/entities/probe-run"
 import type { QueryOutcome } from "@/domain/ai-visibility/entities/probe-run";
 import type { Slot } from "@/domain/ai-visibility/slot";
 
-// Minimal outcome for delta tests, which only care about slots — citation
-// fields default to the parametric reading (0 / none).
-function oc(query: string, slots: Slot[]): QueryOutcome {
-  return { query, slots, competitorsMentioned: [], citedSamples: 0, citations: [] };
+// Minimal outcome for delta tests. citedSamples defaults to 0 (parametric
+// reading); pass it to exercise the citation-axis delta.
+function oc(query: string, slots: Slot[], citedSamples = 0): QueryOutcome {
+  return { query, slots, competitorsMentioned: [], citedSamples, citations: [] };
 }
 
 function run(outcomes: QueryOutcome[], runAt: string): AiVisibilityProbeRun {
@@ -44,6 +44,16 @@ describe("computeAiVisibilityDelta", () => {
     expect(delta.mentionedPctDelta).toBe(50); // 0% -> 50%
     expect(delta.contestedPctDelta).toBe(-50); // 50% -> 0%
     expect(delta.changes).toEqual([{ query: "q1", from: "CONTESTED", to: "MENTIONED" }]);
+  });
+
+  it("reports citation percentage movement across runs", () => {
+    // 2 queries × 1 sample each. Previous: 0 cited. Current: 1 cited → +50%.
+    const previous = run([oc("q1", ["OPEN"], 0), oc("q2", ["OPEN"], 0)], "2026-07-01");
+    const current = run([oc("q1", ["OPEN"], 1), oc("q2", ["OPEN"], 0)], "2026-07-02");
+
+    const delta = computeAiVisibilityDelta(previous, current);
+
+    expect(delta.citedPctDelta).toBe(50); // 0% -> 50%
   });
 
   it("ignores queries not present in both runs", () => {

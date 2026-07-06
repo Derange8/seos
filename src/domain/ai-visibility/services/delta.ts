@@ -18,6 +18,11 @@ export interface AiVisibilityDelta {
   mentionedPctDelta: number;
   openPctDelta: number;
   contestedPctDelta: number;
+  // Citation-axis movement (Faz 2): current minus previous cited %. Only
+  // meaningful when both runs were web-grounded; a mode mismatch (e.g. a
+  // parametric run against a web-grounded one) makes this noise, so callers
+  // read it alongside each run's groundingMode.
+  citedPctDelta: number;
   changes: AiVisibilitySlotChange[];
 }
 
@@ -44,6 +49,7 @@ export function computeAiVisibilityDelta(
     mentionedPctDelta: curr.mentionedPct - prev.mentionedPct,
     openPctDelta: curr.openPct - prev.openPct,
     contestedPctDelta: curr.contestedPct - prev.contestedPct,
+    citedPctDelta: curr.citedPct - prev.citedPct,
     changes,
   };
 }

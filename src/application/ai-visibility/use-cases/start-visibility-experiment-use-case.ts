@@ -24,7 +24,18 @@ export class StartVisibilityExperimentUseCase {
     const existing = await this.deps.experimentRepository.findOpenByProjectAndQuery(projectId, query);
     if (existing) return existing;
 
-    const experiment = VisibilityExperiment.start(projectId, query, dominantSlot(outcome.slots), run.runAt);
+    // Capture the citation axis at baseline alongside the slot: whether this
+    // run was web-grounded (only then is citation observable) and whether the
+    // domain was cited for this query. This is what a later web-grounded
+    // re-measure compares against to credit a citation win (see Faz 2).
+    const experiment = VisibilityExperiment.start(
+      projectId,
+      query,
+      dominantSlot(outcome.slots),
+      run.runAt,
+      run.groundingMode === "web_grounded",
+      outcome.citedSamples > 0
+    );
     await this.deps.experimentRepository.save(experiment);
     return experiment;
   }

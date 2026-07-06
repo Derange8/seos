@@ -22,10 +22,14 @@ interface ExperimentRow {
   query: string;
   baselineSlot: string;
   baselineRunAt: Date;
+  baselineGrounded: boolean;
+  baselineCited: boolean;
   actionAt: Date;
   status: string;
   outcomeSlot: string | null;
   outcomeRunAt: Date | null;
+  outcomeGrounded: boolean | null;
+  outcomeCited: boolean | null;
 }
 
 function toDomain(row: ExperimentRow): VisibilityExperiment {
@@ -35,10 +39,14 @@ function toDomain(row: ExperimentRow): VisibilityExperiment {
     query: row.query,
     baselineSlot: toSlot(row.baselineSlot),
     baselineRunAt: row.baselineRunAt,
+    baselineGrounded: row.baselineGrounded,
+    baselineCited: row.baselineCited,
     actionAt: row.actionAt,
     status: row.status === "RESOLVED" ? "RESOLVED" : "OPEN",
     outcomeSlot: toNullableSlot(row.outcomeSlot),
     outcomeRunAt: row.outcomeRunAt,
+    outcomeGrounded: row.outcomeGrounded,
+    outcomeCited: row.outcomeCited,
   });
 }
 
@@ -52,10 +60,14 @@ export class PrismaVisibilityExperimentRepository implements VisibilityExperimen
       query: experiment.query,
       baselineSlot: experiment.baselineSlot,
       baselineRunAt: experiment.baselineRunAt,
+      baselineGrounded: experiment.baselineGrounded,
+      baselineCited: experiment.baselineCited,
       actionAt: experiment.actionAt,
       status,
       outcomeSlot: experiment.outcomeSlot,
       outcomeRunAt: experiment.outcomeRunAt,
+      outcomeGrounded: experiment.outcomeGrounded,
+      outcomeCited: experiment.outcomeCited,
     };
     await this.client.visibilityExperiment.upsert({
       where: { id: experiment.id },

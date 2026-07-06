@@ -19,24 +19,30 @@ describe("PrismaVisibilityExperimentRepository", () => {
   });
 
   it("saves an open experiment and finds it by project and open-by-query", async () => {
-    const experiment = VisibilityExperiment.start(projectId, "best market", "CONTESTED", new Date("2026-07-01"));
+    // Web-grounded baseline, not yet cited — the citation axis round-trips too.
+    const experiment = VisibilityExperiment.start(projectId, "best market", "OPEN", new Date("2026-07-01"), true, false);
     await repository.save(experiment);
 
     expect(await repository.findByProjectId(projectId)).toHaveLength(1);
     expect(await repository.findOpenByProjectId(projectId)).toHaveLength(1);
     const open = await repository.findOpenByProjectAndQuery(projectId, "best market");
-    expect(open?.baselineSlot).toBe("CONTESTED");
+    expect(open?.baselineSlot).toBe("OPEN");
+    expect(open?.baselineGrounded).toBe(true);
+    expect(open?.baselineCited).toBe(false);
   });
 
-  it("reflects a resolve — status, outcome slot, and computed outcome round-trip", async () => {
+  it("reflects a resolve — a citation gain with a flat slot round-trips as IMPROVED", async () => {
     const found = await repository.findOpenByProjectAndQuery(projectId, "best market");
-    found?.resolve("MENTIONED", new Date("2026-07-10"));
+    // Slot stays OPEN, but the domain is now cited on a web-grounded re-measure.
+    found?.resolve("OPEN", new Date("2026-07-10"), true, true);
     await repository.save(found!);
 
     expect(await repository.findOpenByProjectId(projectId)).toHaveLength(0);
     const [reloaded] = await repository.findByProjectId(projectId);
     expect(reloaded.status).toBe("RESOLVED");
-    expect(reloaded.outcomeSlot).toBe("MENTIONED");
+    expect(reloaded.outcomeSlot).toBe("OPEN");
+    expect(reloaded.outcomeCited).toBe(true);
+    expect(reloaded.citationMovement).toBe("GAINED");
     expect(reloaded.outcome).toBe("IMPROVED");
   });
 });

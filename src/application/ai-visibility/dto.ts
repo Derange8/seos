@@ -4,6 +4,7 @@ import { dominantSlot } from "@/domain/ai-visibility/slot";
 import { buildScorecard, type AiVisibilityScorecard } from "@/domain/ai-visibility/services/scorecard";
 import { computeAiVisibilityDelta, type AiVisibilityDelta } from "@/domain/ai-visibility/services/delta";
 import type {
+  CitationMovement,
   ExperimentOutcome,
   ExperimentStatus,
   VisibilityExperiment,
@@ -48,6 +49,10 @@ export interface VisibilityExperimentDto {
   status: ExperimentStatus;
   outcomeSlot: Slot | null;
   outcome: ExperimentOutcome | null;
+  // Citation-axis reading (Faz 2), null until resolved. "GAINED" is the star
+  // signal — the site entered AI-search sources after acting, even if the
+  // mention slot hasn't moved yet.
+  citationMovement: CitationMovement | null;
 }
 
 export function toVisibilityExperimentDto(experiment: VisibilityExperiment): VisibilityExperimentDto {
@@ -59,6 +64,7 @@ export function toVisibilityExperimentDto(experiment: VisibilityExperiment): Vis
     status: experiment.status,
     outcomeSlot: experiment.outcomeSlot,
     outcome: experiment.outcome,
+    citationMovement: experiment.citationMovement,
   };
 }
 
