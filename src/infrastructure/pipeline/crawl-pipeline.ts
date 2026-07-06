@@ -17,6 +17,7 @@ import { FinalizeCrawlJobIfDoneUseCase } from "@/application/crawling/use-cases/
 import { DetectBrokenLinksUseCase } from "@/application/crawling/use-cases/detect-broken-links-use-case";
 import { DetectDuplicateContentUseCase } from "@/application/crawling/use-cases/detect-duplicate-content-use-case";
 import { DetectOrphanPagesUseCase } from "@/application/crawling/use-cases/detect-orphan-pages-use-case";
+import { AuditRobotsAndSitemapUseCase } from "@/application/crawling/use-cases/audit-robots-and-sitemap-use-case";
 import { CrawlJobCompleted } from "@/domain/crawling/events/crawl-job-completed";
 import { AuditRunCompleted } from "@/domain/auditing/events/audit-run-completed";
 import { PrismaAuditRunRepository } from "@/infrastructure/persistence/prisma/prisma-audit-run-repository";
@@ -84,6 +85,11 @@ export function createCrawlPipeline(
   const detectBrokenLinks = new DetectBrokenLinksUseCase({ pageRepository });
   const detectDuplicateContent = new DetectDuplicateContentUseCase({ pageRepository });
   const detectOrphanPages = new DetectOrphanPagesUseCase({ pageRepository });
+  const auditRobotsAndSitemap = new AuditRobotsAndSitemapUseCase({
+    pageRepository,
+    robots: new HttpRobotsFetcher({ allowPrivateNetworks: options.allowPrivateNetworks }),
+    pageFetcher: new HttpPageFetcher({ allowPrivateNetworks: options.allowPrivateNetworks }),
+  });
 
   const generateSitemap = new GenerateSitemapUseCase({
     pageRepository,
@@ -158,11 +164,13 @@ export function createCrawlPipeline(
   // enrichment is the one exception — a real LLM call, slow and fallible
   // in ways nothing else here is, so it only enqueues onto its own queue.
   //
-  // detectBrokenLinks, detectDuplicateContent, and detectOrphanPages are
-  // the ordering exception: DomainEventDispatcher runs same-event handlers
-  // sequentially in registration order (see dispatch()), and several rules
-  // (broken-internal-links, duplicate-title/meta/content, orphan-page)
-  // read flags only these three set — so all three must run and finish
+  // detectBrokenLinks, detectDuplicateContent, detectOrphanPages, and
+  // auditRobotsAndSitemap are the ordering exception: DomainEventDispatcher
+  // runs same-event handlers sequentially in registration order (see
+  // dispatch()), and several rules (broken-internal-links,
+  // duplicate-title/meta/content, orphan-page, robots-blocks-entire-site/
+  // robots-missing-sitemap-directive/sitemap-unreachable/sitemap-invalid-xml)
+  // read flags only these four set — so all four must run and finish
   // before runAudit, not just be independent of it.
   eventDispatcher.on(CrawlJobCompleted, async (event) => {
     await detectBrokenLinks.execute(event.projectId, event.crawlJobId);
@@ -172,6 +180,9 @@ export function createCrawlPipeline(
   });
   eventDispatcher.on(CrawlJobCompleted, async (event) => {
     await detectOrphanPages.execute(event.projectId, event.crawlJobId);
+  });
+  eventDispatcher.on(CrawlJobCompleted, async (event) => {
+    await auditRobotsAndSitemap.execute(event.projectId, event.crawlJobId);
   });
   eventDispatcher.on(CrawlJobCompleted, async (event) => {
     await runAudit.execute(event.projectId, event.crawlJobId);

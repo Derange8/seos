@@ -84,6 +84,10 @@ function toDomain(row: PrismaPageRow & { links: PrismaLinkRow[] }): Page {
     externalScriptOrigins: toDomainExternalScriptOrigins(row.externalScriptOrigins),
     rawWordCount: row.rawWordCount,
     isClientSideOnlyContent: row.isClientSideOnlyContent,
+    robotsBlocksEntireSite: row.robotsBlocksEntireSite,
+    robotsMissingSitemapDirective: row.robotsMissingSitemapDirective,
+    sitemapIsUnreachable: row.sitemapIsUnreachable,
+    sitemapIsInvalidXml: row.sitemapIsInvalidXml,
   };
 
   const links = row.links.map((linkRow) =>
@@ -131,6 +135,10 @@ export class PrismaPageRepository implements PageRepositoryPort {
       externalScriptOrigins: page.externalScriptOrigins,
       rawWordCount: page.rawWordCount,
       isClientSideOnlyContent: page.isClientSideOnlyContent,
+      robotsBlocksEntireSite: page.robotsBlocksEntireSite,
+      robotsMissingSitemapDirective: page.robotsMissingSitemapDirective,
+      sitemapIsUnreachable: page.sitemapIsUnreachable,
+      sitemapIsInvalidXml: page.sitemapIsInvalidXml,
       crawledAt: page.crawledAt,
     };
 

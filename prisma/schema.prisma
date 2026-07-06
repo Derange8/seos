@@ -150,6 +150,15 @@ model Page {
   // executes (rawWordCount near-empty, rendered wordCount substantial) —
   // feeds client-side-only-content-rule.
   isClientSideOnlyContent     Boolean        @default(false)
+  // Site-level robots.txt/sitemap.xml audit facts, computed post-crawl by
+  // AuditRobotsAndSitemapUseCase and attached to the crawl's root page
+  // (see that use case for why). Feeds robots-blocks-entire-site /
+  // robots-missing-sitemap-directive / sitemap-unreachable /
+  // sitemap-invalid-xml.
+  robotsBlocksEntireSite       Boolean        @default(false)
+  robotsMissingSitemapDirective Boolean?
+  sitemapIsUnreachable         Boolean        @default(false)
+  sitemapIsInvalidXml          Boolean?
   links                       Link[]
   auditIssues                 AuditIssue[]
   schemaMarkups               SchemaMarkup[]

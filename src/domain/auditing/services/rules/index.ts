@@ -24,6 +24,10 @@ import { cspBlocksScriptRule } from "@/domain/auditing/services/rules/csp-blocks
 import { clientSideOnlyContentRule } from "@/domain/auditing/services/rules/client-side-only-content-rule";
 import { invalidStructuredDataRule } from "@/domain/auditing/services/rules/invalid-structured-data-rule";
 import { unrecognizedStructuredDataTypeRule } from "@/domain/auditing/services/rules/unrecognized-structured-data-type-rule";
+import { robotsBlocksEntireSiteRule } from "@/domain/auditing/services/rules/robots-blocks-entire-site-rule";
+import { robotsMissingSitemapDirectiveRule } from "@/domain/auditing/services/rules/robots-missing-sitemap-directive-rule";
+import { sitemapUnreachableRule } from "@/domain/auditing/services/rules/sitemap-unreachable-rule";
+import { sitemapInvalidXmlRule } from "@/domain/auditing/services/rules/sitemap-invalid-xml-rule";
 
 // The plugin registry — adding a rule means writing one AuditRule and
 // listing it here, nothing else in the engine needs to change.
@@ -53,4 +57,8 @@ export const DEFAULT_AUDIT_RULES: readonly AuditRule[] = [
   clientSideOnlyContentRule,
   invalidStructuredDataRule,
   unrecognizedStructuredDataTypeRule,
+  robotsBlocksEntireSiteRule,
+  robotsMissingSitemapDirectiveRule,
+  sitemapUnreachableRule,
+  sitemapInvalidXmlRule,
 ];

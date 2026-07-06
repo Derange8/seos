@@ -79,6 +79,10 @@ describe("selectSitemapEntries", () => {
         externalScriptOrigins: [],
         rawWordCount: null,
         isClientSideOnlyContent: false,
+        robotsBlocksEntireSite: false,
+        robotsMissingSitemapDirective: null,
+        sitemapIsUnreachable: false,
+        sitemapIsInvalidXml: null,
       },
       []
     );

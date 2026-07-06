@@ -101,6 +101,28 @@ export interface PageAttributes {
   // little content even though a browser sees plenty. Always false when
   // rawWordCount wasn't measured (deepCsrCheck off).
   isClientSideOnlyContent?: boolean;
+  // Whether the site's live robots.txt disallows "/" (the entire site) for
+  // at least one User-agent group — computed post-crawl by
+  // AuditRobotsAndSitemapUseCase (site-level, not really "about" this page,
+  // but every AuditIssue needs a pageId — see that use case for why it's
+  // attached to the crawl's root page specifically). Always false when not
+  // yet computed (e.g. an old Page row from before this field existed).
+  // Feeds the robots-blocks-entire-site rule.
+  robotsBlocksEntireSite?: boolean;
+  // Whether the site's live robots.txt exists but has no "Sitemap:"
+  // directive pointing search engines at the sitemap. Feeds the
+  // robots-missing-sitemap-directive rule. Null means "no robots.txt was
+  // found at all" (a separate, already-covered case — a missing file isn't
+  // a missing directive within a file that exists).
+  robotsMissingSitemapDirective?: boolean | null;
+  // Whether the site's live sitemap.xml could not be fetched at all (404
+  // or network error). Feeds the sitemap-unreachable rule.
+  sitemapIsUnreachable?: boolean;
+  // Whether the site's live sitemap.xml was fetched but isn't well-formed
+  // XML. Null when the sitemap couldn't be fetched in the first place
+  // (sitemapIsUnreachable already covers that case). Feeds the
+  // sitemap-invalid-xml rule.
+  sitemapIsInvalidXml?: boolean | null;
 }
 
 export interface PageProps extends Required<PageAttributes> {
@@ -148,6 +170,10 @@ export class Page {
       externalScriptOrigins: attributes.externalScriptOrigins ?? [],
       rawWordCount: attributes.rawWordCount ?? null,
       isClientSideOnlyContent: attributes.isClientSideOnlyContent ?? false,
+      robotsBlocksEntireSite: attributes.robotsBlocksEntireSite ?? false,
+      robotsMissingSitemapDirective: attributes.robotsMissingSitemapDirective ?? null,
+      sitemapIsUnreachable: attributes.sitemapIsUnreachable ?? false,
+      sitemapIsInvalidXml: attributes.sitemapIsInvalidXml ?? null,
     });
   }
 
@@ -290,6 +316,37 @@ export class Page {
 
   get isClientSideOnlyContent(): boolean {
     return this.props.isClientSideOnlyContent;
+  }
+
+  get robotsBlocksEntireSite(): boolean {
+    return this.props.robotsBlocksEntireSite;
+  }
+
+  get robotsMissingSitemapDirective(): boolean | null {
+    return this.props.robotsMissingSitemapDirective;
+  }
+
+  get sitemapIsUnreachable(): boolean {
+    return this.props.sitemapIsUnreachable;
+  }
+
+  get sitemapIsInvalidXml(): boolean | null {
+    return this.props.sitemapIsInvalidXml;
+  }
+
+  // Recomputed wholesale on every AuditRobotsAndSitemapUseCase run, same
+  // rationale as setDuplicateFlags/setOrphan — a site's robots.txt/sitemap
+  // can change between crawls.
+  setRobotsAndSitemapFlags(flags: {
+    robotsBlocksEntireSite: boolean;
+    robotsMissingSitemapDirective: boolean | null;
+    sitemapIsUnreachable: boolean;
+    sitemapIsInvalidXml: boolean | null;
+  }): void {
+    this.props.robotsBlocksEntireSite = flags.robotsBlocksEntireSite;
+    this.props.robotsMissingSitemapDirective = flags.robotsMissingSitemapDirective;
+    this.props.sitemapIsUnreachable = flags.sitemapIsUnreachable;
+    this.props.sitemapIsInvalidXml = flags.sitemapIsInvalidXml;
   }
 
   // Same rationale as setDuplicateFlags: recomputed wholesale on every
