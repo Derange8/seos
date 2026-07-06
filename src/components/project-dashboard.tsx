@@ -26,6 +26,7 @@ import type { AiVisibilityRunDto, AiVisibilityTrendPointDto, VisibilityExperimen
 import { AiVisibilityTrendChart } from "@/components/ai-visibility-trend-chart";
 import type { CitationDraft } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { formatAuditReport } from "@/lib/format-audit-report";
+import { formatAiVisibilityReport } from "@/lib/format-ai-visibility-report";
 
 type KeywordOpportunityRow = KeywordOpportunityDto & { suggestion: string | null };
 
@@ -111,6 +112,7 @@ const TRANSLATIONS = {
   copy: { en: "Copy", tr: "Kopyala" },
   copied: { en: "Copied!", tr: "Kopyalandı!" },
   copyFullReport: { en: "Copy full report", tr: "Tüm raporu kopyala" },
+  copyReport: { en: "Copy report", tr: "Raporu kopyala" },
   approveApply: { en: "Approve & Apply", tr: "Onayla & Uygula" },
   applying: { en: "Applying…", tr: "Uygulanıyor…" },
   revert: { en: "Revert", tr: "Geri al" },
@@ -325,6 +327,7 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [fixCandidates, setFixCandidates] = useState<FixCandidateDto[]>([]);
   const [copiedFixId, setCopiedFixId] = useState<string | null>(null);
   const [copiedFullReport, setCopiedFullReport] = useState(false);
+  const [copiedAiVisibilityReport, setCopiedAiVisibilityReport] = useState(false);
   const [delta, setDelta] = useState<AuditDeltaDto | null>(null);
   const [eventFailures, setEventFailures] = useState<EventFailureDto[]>([]);
 
@@ -1839,6 +1842,21 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
             <CardHeader>
               <CardTitle>{t("cardAiVisibility")}</CardTitle>
               <CardAction className="flex gap-2">
+                {aiVisibility && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(
+                        formatAiVisibilityReport(project.domain, aiVisibility, aiVisibilityTrend, experiments)
+                      );
+                      setCopiedAiVisibilityReport(true);
+                      setTimeout(() => setCopiedAiVisibilityReport(false), 1500);
+                    }}
+                  >
+                    {copiedAiVisibilityReport ? t("copied") : t("copyReport")}
+                  </Button>
+                )}
                 <Button
                   onClick={handleSuggestAiVisibilityQueries}
                   disabled={isSuggestingQueries || isProbingAiVisibility}
