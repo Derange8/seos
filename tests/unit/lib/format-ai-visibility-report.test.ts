@@ -90,6 +90,7 @@ describe("formatAiVisibilityReport", () => {
           openPctDelta: -25,
           contestedPctDelta: 0,
           citedPctDelta: 25,
+          citedComparable: true,
           changes: [],
         },
       }),
@@ -112,6 +113,7 @@ describe("formatAiVisibilityReport", () => {
           openPctDelta: -10,
           contestedPctDelta: 0,
           citedPctDelta: 0,
+          citedComparable: false,
           changes: [],
         },
       }),
@@ -120,6 +122,34 @@ describe("formatAiVisibilityReport", () => {
     );
     expect(report).toContain("SINCE LAST RUN");
     expect(report).not.toContain("Cited +0%");
+  });
+
+  it("omits the cited delta on a web-grounded run when the previous run wasn't comparable", () => {
+    // The reviewed bug: current run is web_grounded but the baseline was
+    // parametric, so citedComparable is false and citedPctDelta was forced to
+    // 0 — the report must NOT print a (fabricated) cited movement.
+    const report = formatAiVisibilityReport(
+      "acme.com",
+      run({
+        groundingMode: "web_grounded",
+        delta: {
+          previousRunAt: "2026-07-01T00:00:00.000Z",
+          mentionedPctDelta: 0,
+          openPctDelta: 0,
+          contestedPctDelta: 0,
+          citedPctDelta: 0,
+          citedComparable: false,
+          changes: [],
+        },
+      }),
+      [],
+      []
+    );
+    // The SCORECARD still legitimately shows "Cited (...)" for this grounded
+    // run; what must be absent is a cited MOVEMENT line in the delta section.
+    const sinceSection = report.slice(report.indexOf("SINCE LAST RUN"));
+    expect(report).toContain("SINCE LAST RUN");
+    expect(sinceSection).not.toContain("Cited");
   });
 
   it("lists winnable queries and dominating competitors", () => {

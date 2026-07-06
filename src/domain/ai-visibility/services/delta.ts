@@ -19,10 +19,14 @@ export interface AiVisibilityDelta {
   openPctDelta: number;
   contestedPctDelta: number;
   // Citation-axis movement (Faz 2): current minus previous cited %. Only
-  // meaningful when both runs were web-grounded; a mode mismatch (e.g. a
-  // parametric run against a web-grounded one) makes this noise, so callers
-  // read it alongside each run's groundingMode.
+  // meaningful when BOTH runs were web-grounded — a parametric run has no
+  // citations (citedPct always 0), so a parametric→web_grounded pair would
+  // otherwise show a fabricated gain (the same mode-mismatch classifyCitation-
+  // Movement guards against). citedComparable is false in that case, and
+  // citedPctDelta is forced to 0; callers must hide the cited figure when
+  // citedComparable is false rather than reading citedPctDelta.
   citedPctDelta: number;
+  citedComparable: boolean;
   changes: AiVisibilitySlotChange[];
 }
 
@@ -44,12 +48,19 @@ export function computeAiVisibilityDelta(
     if (from !== to) changes.push({ query: o.query, from, to });
   }
 
+  // Citation is only comparable when both ends actually measured it (both
+  // web-grounded). Otherwise report 0 movement and flag it not-comparable so
+  // a parametric baseline never fabricates a citation gain.
+  const citedComparable =
+    previous.groundingMode === "web_grounded" && current.groundingMode === "web_grounded";
+
   return {
     previousRunAt: previous.runAt.toISOString(),
     mentionedPctDelta: curr.mentionedPct - prev.mentionedPct,
     openPctDelta: curr.openPct - prev.openPct,
     contestedPctDelta: curr.contestedPct - prev.contestedPct,
-    citedPctDelta: curr.citedPct - prev.citedPct,
+    citedPctDelta: citedComparable ? curr.citedPct - prev.citedPct : 0,
+    citedComparable,
     changes,
   };
 }

@@ -59,7 +59,9 @@ export function formatAiVisibilityReport(
       `Open ${fmtSignedPct(d.openPctDelta)}`,
       `Contested ${fmtSignedPct(d.contestedPctDelta)}`,
     ];
-    if (grounded) deltaLines.push(`Cited ${fmtSignedPct(d.citedPctDelta)}`);
+    // Only show cited movement when both runs measured it (see citedComparable);
+    // otherwise it'd be a fabricated gain against a parametric baseline.
+    if (grounded && d.citedComparable) deltaLines.push(`Cited ${fmtSignedPct(d.citedPctDelta)}`);
     sections.push(`SINCE LAST RUN (${since})\n  ${deltaLines.join(" · ")}`);
   }
 

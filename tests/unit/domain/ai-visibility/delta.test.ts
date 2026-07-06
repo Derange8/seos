@@ -10,12 +10,16 @@ function oc(query: string, slots: Slot[], citedSamples = 0): QueryOutcome {
   return { query, slots, competitorsMentioned: [], citedSamples, citations: [] };
 }
 
-function run(outcomes: QueryOutcome[], runAt: string): AiVisibilityProbeRun {
+function run(
+  outcomes: QueryOutcome[],
+  runAt: string,
+  groundingMode: "parametric" | "web_grounded" = "parametric"
+): AiVisibilityProbeRun {
   return AiVisibilityProbeRun.reconstitute({
     id: crypto.randomUUID(),
     projectId: "p1",
     samplesPerQuery: 1,
-    groundingMode: "parametric",
+    groundingMode,
     runAt: new Date(runAt),
     outcomes,
   });
@@ -46,14 +50,27 @@ describe("computeAiVisibilityDelta", () => {
     expect(delta.changes).toEqual([{ query: "q1", from: "CONTESTED", to: "MENTIONED" }]);
   });
 
-  it("reports citation percentage movement across runs", () => {
+  it("reports citation percentage movement when both runs are web-grounded", () => {
     // 2 queries × 1 sample each. Previous: 0 cited. Current: 1 cited → +50%.
-    const previous = run([oc("q1", ["OPEN"], 0), oc("q2", ["OPEN"], 0)], "2026-07-01");
-    const current = run([oc("q1", ["OPEN"], 1), oc("q2", ["OPEN"], 0)], "2026-07-02");
+    const previous = run([oc("q1", ["OPEN"], 0), oc("q2", ["OPEN"], 0)], "2026-07-01", "web_grounded");
+    const current = run([oc("q1", ["OPEN"], 1), oc("q2", ["OPEN"], 0)], "2026-07-02", "web_grounded");
 
     const delta = computeAiVisibilityDelta(previous, current);
 
+    expect(delta.citedComparable).toBe(true);
     expect(delta.citedPctDelta).toBe(50); // 0% -> 50%
+  });
+
+  it("does not fabricate a citation gain when the previous run was parametric", () => {
+    // The reviewed bug: parametric baseline (never any citations) vs a
+    // web-grounded current run must NOT read as a citation gain.
+    const previous = run([oc("q1", ["OPEN"], 0), oc("q2", ["OPEN"], 0)], "2026-07-01", "parametric");
+    const current = run([oc("q1", ["OPEN"], 1), oc("q2", ["OPEN"], 1)], "2026-07-02", "web_grounded");
+
+    const delta = computeAiVisibilityDelta(previous, current);
+
+    expect(delta.citedComparable).toBe(false);
+    expect(delta.citedPctDelta).toBe(0); // forced to 0, not the fabricated +100%
   });
 
   it("ignores queries not present in both runs", () => {

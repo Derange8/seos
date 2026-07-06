@@ -1949,7 +1949,7 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                         <span className="text-muted-foreground">
                           Contested {fmtDelta(aiVisibility.delta.contestedPctDelta)}%
                         </span>
-                        {aiVisibility.groundingMode === "web_grounded" && (
+                        {aiVisibility.groundingMode === "web_grounded" && aiVisibility.delta.citedComparable && (
                           <span className={deltaClass(aiVisibility.delta.citedPctDelta)}>
                             🔗 Cited {fmtDelta(aiVisibility.delta.citedPctDelta)}%
                           </span>
