@@ -378,6 +378,9 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [aiVisibilityError, setAiVisibilityError] = useState<string | null>(null);
   const [aiVisibilityQueries, setAiVisibilityQueries] = useState("");
   const [aiVisibilityCompetitors, setAiVisibilityCompetitors] = useState("");
+  // Default to the real AI-search surface (web-grounded); the toggle lets a
+  // user fall back to the cheap memory-only reading.
+  const [aiVisibilityWebGrounded, setAiVisibilityWebGrounded] = useState(true);
   const [diagnosingQuery, setDiagnosingQuery] = useState<string | null>(null);
   const [diagnoses, setDiagnoses] = useState<Record<string, string[]>>({});
   const [diagnoseErrors, setDiagnoseErrors] = useState<Record<string, string>>({});
@@ -798,7 +801,11 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       response = await fetch(`/api/v1/projects/${project.id}/ai-visibility`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ queries, competitors }),
+        body: JSON.stringify({
+          queries,
+          competitors,
+          groundingMode: aiVisibilityWebGrounded ? "web_grounded" : "parametric",
+        }),
       });
     } catch {
       setIsProbingAiVisibility(false);
@@ -1852,6 +1859,16 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                 propose them from your site, or type your own (one per line). Each is sampled several times, so
                 this can take a minute.
               </p>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={aiVisibilityWebGrounded}
+                  onChange={(e) => setAiVisibilityWebGrounded(e.target.checked)}
+                  className="accent-cyan-400"
+                />
+                Use live web search (real AI-search surface + source citations). Uncheck for a faster,
+                cheaper memory-only reading.
+              </label>
               <div className="flex flex-col gap-1">
                 <Label htmlFor="ai-visibility-queries">Target queries (one per line)</Label>
                 <textarea
@@ -1890,8 +1907,13 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                     <span className="text-green-400">✅ Mentioned {aiVisibility.scorecard.mentionedPct}%</span>
                     <span className="text-cyan-300">🟢 Open {aiVisibility.scorecard.openPct}%</span>
                     <span className="text-muted-foreground">⛔ Contested {aiVisibility.scorecard.contestedPct}%</span>
+                    {aiVisibility.groundingMode === "web_grounded" && (
+                      <span className="text-amber-300">🔗 Cited {aiVisibility.scorecard.citedPct}%</span>
+                    )}
                     <span className="text-muted-foreground">
-                      ({aiVisibility.scorecard.totalSamples} samples · {new Date(aiVisibility.runAt).toLocaleString()})
+                      ({aiVisibility.scorecard.totalSamples} samples ·{" "}
+                      {aiVisibility.groundingMode === "web_grounded" ? "web search" : "memory"} ·{" "}
+                      {new Date(aiVisibility.runAt).toLocaleString()})
                     </span>
                   </div>
                   {aiVisibility.delta && (
@@ -1947,6 +1969,11 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                             <span className="text-xs text-muted-foreground">
                               M{q.mentioned}/O{q.open}/C{q.contested}
                             </span>
+                            {q.citedSamples > 0 && (
+                              <span className="text-xs text-amber-300" title="Samples that cited your domain">
+                                🔗 {q.citedSamples}
+                              </span>
+                            )}
                             {q.dominantSlot !== "MENTIONED" && (
                               <Button
                                 variant="outline"
@@ -1959,6 +1986,28 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                             )}
                           </span>
                         </div>
+                        {q.citations.length > 0 && (
+                          <details className="text-xs text-muted-foreground">
+                            <summary className="cursor-pointer select-none">
+                              Sources cited ({q.citations.length})
+                            </summary>
+                            <ul className="mt-1 flex flex-col gap-0.5 pl-2">
+                              {q.citations.map((c) => (
+                                <li key={c.url} className="truncate">
+                                  <a
+                                    href={c.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-cyan-300 hover:underline"
+                                    title={c.url}
+                                  >
+                                    {c.title ?? c.url}
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
                         {diagnoseErrors[q.query] && <p className="text-xs text-red-400">{diagnoseErrors[q.query]}</p>}
                         {diagnoses[q.query] && (
                           <ul className="list-disc pl-5 text-xs text-muted-foreground">
