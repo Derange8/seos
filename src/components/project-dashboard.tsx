@@ -22,7 +22,8 @@ import type { AuditDeltaDto } from "@/application/delta-audit/dto";
 import type { WordPressConnectionDto } from "@/application/wordpress/dto";
 import type { SearchPerformanceSnapshotDto, AnalyticsSnapshotDto, KeywordOpportunityDto, KeywordCannibalizationIssueDto, CtrUnderperformerDto } from "@/application/tracking/dto";
 import type { ContentIdeaDto, GrowthAnalysisDto, PageContentDraftDto } from "@/application/content-enrichment/dto";
-import type { AiVisibilityRunDto, VisibilityExperimentDto } from "@/application/ai-visibility/dto";
+import type { AiVisibilityRunDto, AiVisibilityTrendPointDto, VisibilityExperimentDto } from "@/application/ai-visibility/dto";
+import { AiVisibilityTrendChart } from "@/components/ai-visibility-trend-chart";
 import type { CitationDraft } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { formatAuditReport } from "@/lib/format-audit-report";
 
@@ -371,6 +372,7 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [growthAnalysisError, setGrowthAnalysisError] = useState<string | null>(null);
 
   const [aiVisibility, setAiVisibility] = useState<AiVisibilityRunDto | null>(null);
+  const [aiVisibilityTrend, setAiVisibilityTrend] = useState<AiVisibilityTrendPointDto[]>([]);
   const [isProbingAiVisibility, setIsProbingAiVisibility] = useState(false);
   const [isSuggestingQueries, setIsSuggestingQueries] = useState(false);
   const [aiVisibilityError, setAiVisibilityError] = useState<string | null>(null);
@@ -453,6 +455,10 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       .then((response) => (response.ok ? response.json() : []))
       .then((data: VisibilityExperimentDto[]) => setExperiments(data))
       .catch((error: unknown) => console.error("Failed to fetch visibility experiments", error));
+    fetch(`/api/v1/projects/${project.id}/ai-visibility/trend`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data: AiVisibilityTrendPointDto[]) => setAiVisibilityTrend(data))
+      .catch((error: unknown) => console.error("Failed to fetch AI visibility trend", error));
   }, [project.id]);
 
   useEffect(() => {
@@ -809,6 +815,10 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     setAiVisibility(data);
     // A fresh probe may have resolved open experiments — reflect outcomes.
     refreshAiVisibilityExperiments();
+    fetch(`/api/v1/projects/${project.id}/ai-visibility/trend`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((trendData: AiVisibilityTrendPointDto[]) => setAiVisibilityTrend(trendData))
+      .catch((error: unknown) => console.error("Failed to fetch AI visibility trend", error));
   }
 
   async function handleGenerateGrowthAnalysis() {
@@ -1865,6 +1875,14 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
               {aiVisibilityError && <p className="text-red-400">{aiVisibilityError}</p>}
               {!aiVisibility && !aiVisibilityError && (
                 <p className="text-muted-foreground">No probe run yet for this project.</p>
+              )}
+              {aiVisibilityTrend.length >= 2 && (
+                <div className="rounded-md border border-white/10 bg-black/20 p-3">
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    Trend ({aiVisibilityTrend.length} runs)
+                  </p>
+                  <AiVisibilityTrendChart points={aiVisibilityTrend} />
+                </div>
               )}
               {aiVisibility && (
                 <div className="flex flex-col gap-3">

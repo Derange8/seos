@@ -11,6 +11,7 @@ import { CheerioHtmlParser } from "@/infrastructure/html/cheerio-html-parser";
 import { ConsoleLogger } from "@/infrastructure/logging/console-logger";
 import { startGoogleTrackingScheduler } from "@/infrastructure/scheduling/google-tracking-scheduler";
 import { startAutoPilotScheduler } from "@/infrastructure/scheduling/auto-pilot-scheduler";
+import { startAutoAiVisibilityProbeScheduler } from "@/infrastructure/scheduling/auto-ai-visibility-probe-scheduler";
 import { InProcessCrawlQueue } from "@/infrastructure/queue/in-process/in-process-crawl-queue";
 import { InProcessRecommendationQueue } from "@/infrastructure/queue/in-process/in-process-recommendation-queue";
 import { ProcessPageTaskUseCase } from "@/application/crawling/use-cases/process-page-task-use-case";
@@ -249,6 +250,7 @@ const globalForPipeline = globalThis as unknown as {
   crawlPipeline?: CrawlPipeline;
   googleTrackingSchedulerStarted?: boolean;
   autoPilotSchedulerStarted?: boolean;
+  autoAiVisibilityProbeSchedulerStarted?: boolean;
 };
 
 // Same singleton rationale as prisma-client.ts — one pipeline (and its
@@ -274,4 +276,9 @@ if (!globalForPipeline.googleTrackingSchedulerStarted) {
 if (!globalForPipeline.autoPilotSchedulerStarted) {
   startAutoPilotScheduler(crawlQueue, new ConsoleLogger());
   globalForPipeline.autoPilotSchedulerStarted = true;
+}
+
+if (!globalForPipeline.autoAiVisibilityProbeSchedulerStarted) {
+  startAutoAiVisibilityProbeScheduler(new ConsoleLogger());
+  globalForPipeline.autoAiVisibilityProbeSchedulerStarted = true;
 }

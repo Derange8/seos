@@ -49,6 +49,30 @@ export function toVisibilityExperimentDto(experiment: VisibilityExperiment): Vis
   };
 }
 
+export interface AiVisibilityTrendPointDto {
+  runAt: string;
+  mentionedPct: number;
+  contestedPct: number;
+  openPct: number;
+}
+
+// Oldest-first (chart reading order), unlike findRecentByProjectId's own
+// most-recent-first ordering — the trend chart plots left-to-right as time
+// moves forward.
+export function toAiVisibilityTrendDto(runs: readonly AiVisibilityProbeRun[]): AiVisibilityTrendPointDto[] {
+  return [...runs]
+    .sort((a, b) => a.runAt.getTime() - b.runAt.getTime())
+    .map((run) => {
+      const scorecard = buildScorecard(run.outcomes);
+      return {
+        runAt: run.runAt.toISOString(),
+        mentionedPct: scorecard.mentionedPct,
+        contestedPct: scorecard.contestedPct,
+        openPct: scorecard.openPct,
+      };
+    });
+}
+
 export function toAiVisibilityRunDto(
   run: AiVisibilityProbeRun,
   previous: AiVisibilityProbeRun | null = null

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toAiVisibilityRunDto } from "@/application/ai-visibility/dto";
+import { toAiVisibilityRunDto, toAiVisibilityTrendDto } from "@/application/ai-visibility/dto";
 import { AiVisibilityProbeRun } from "@/domain/ai-visibility/entities/probe-run";
 
 describe("toAiVisibilityRunDto", () => {
@@ -31,5 +31,38 @@ describe("toAiVisibilityRunDto", () => {
     // OPEN/CONTESTED tie resolves to CONTESTED (see dominantSlot).
     expect(contested?.dominantSlot).toBe("CONTESTED");
     expect(contested?.competitorsMentioned).toEqual(["Polymarket"]);
+  });
+});
+
+describe("toAiVisibilityTrendDto", () => {
+  function run(id: string, runAt: string, slots: readonly ("MENTIONED" | "CONTESTED" | "OPEN")[]): AiVisibilityProbeRun {
+    return AiVisibilityProbeRun.reconstitute({
+      id,
+      projectId: "project-1",
+      samplesPerQuery: slots.length,
+      runAt: new Date(runAt),
+      outcomes: [{ query: "q", slots, competitorsMentioned: [] }],
+    });
+  }
+
+  it("sorts runs oldest-first regardless of input order", () => {
+    const newer = run("run-2", "2026-07-05T00:00:00.000Z", ["MENTIONED"]);
+    const older = run("run-1", "2026-07-01T00:00:00.000Z", ["OPEN"]);
+
+    const trend = toAiVisibilityTrendDto([newer, older]);
+
+    expect(trend.map((p) => p.runAt)).toEqual([older.runAt.toISOString(), newer.runAt.toISOString()]);
+  });
+
+  it("maps each run to its scorecard percentages", () => {
+    const r = run("run-1", "2026-07-01T00:00:00.000Z", ["OPEN", "OPEN", "CONTESTED", "MENTIONED"]);
+
+    const trend = toAiVisibilityTrendDto([r]);
+
+    expect(trend).toEqual([{ runAt: r.runAt.toISOString(), mentionedPct: 25, contestedPct: 25, openPct: 50 }]);
+  });
+
+  it("returns an empty array for no runs", () => {
+    expect(toAiVisibilityTrendDto([])).toEqual([]);
   });
 });
