@@ -1931,6 +1931,11 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                         <span className="text-muted-foreground">
                           Contested {fmtDelta(aiVisibility.delta.contestedPctDelta)}%
                         </span>
+                        {aiVisibility.groundingMode === "web_grounded" && (
+                          <span className={deltaClass(aiVisibility.delta.citedPctDelta)}>
+                            🔗 Cited {fmtDelta(aiVisibility.delta.citedPctDelta)}%
+                          </span>
+                        )}
                       </div>
                       {aiVisibility.delta.changes.length > 0 && (
                         <ul className="list-disc pl-5 text-xs text-muted-foreground">
@@ -2107,6 +2112,11 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                           {e.baselineSlot}
                           {e.outcomeSlot ? ` → ${e.outcomeSlot}` : ""}
                         </span>
+                        {e.citationMovement === "GAINED" && (
+                          <span className="text-amber-300" title="Now cited in AI-search sources">
+                            🔗 cited
+                          </span>
+                        )}
                         {e.status === "OPEN" ? (
                           <Badge variant="outline">tracking…</Badge>
                         ) : (
