@@ -15,6 +15,8 @@ import { requireProjectAccess } from "@/infrastructure/auth/require-project-acce
 import { ConsoleLogger } from "@/infrastructure/logging/console-logger";
 
 const MAX_QUERIES = 20;
+// samplesPerQuery is the adaptive MINIMUM; sampling grows up to MAX_SAMPLES
+// only for queries whose reading stays uncertain (see the probe use case).
 const MAX_SAMPLES = 5;
 const DEFAULT_SAMPLES = 3;
 
@@ -65,7 +67,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: "At least one query is required", code: "NO_QUERIES" }, { status: 400 });
   }
   const competitors = sanitizeStringList(payload.competitors);
+  // The minimum samples per query; adaptive sampling then grows up to
+  // maxSamplesPerQuery for queries that stay uncertain.
   const samplesPerQuery = clamp(Number(payload.samplesPerQuery) || DEFAULT_SAMPLES, 1, MAX_SAMPLES);
+  const maxSamplesPerQuery = clamp(
+    Number(payload.maxSamplesPerQuery) || MAX_SAMPLES,
+    samplesPerQuery,
+    MAX_SAMPLES
+  );
   // Default to the real AI-search surface; only fall back to the cheap
   // memory-only reading when explicitly asked. An unrecognized value is
   // treated as web_grounded rather than silently downgraded.
@@ -87,6 +96,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     model: new DynamicAiVisibilityModel(new PrismaLlmSettingsRepository(prisma), new ConsoleLogger()),
     runRepository,
     samplesPerQuery,
+    maxSamplesPerQuery,
     logger: new ConsoleLogger(),
   });
 

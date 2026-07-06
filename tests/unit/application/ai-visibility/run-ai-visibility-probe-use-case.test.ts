@@ -222,6 +222,84 @@ describe("RunAiVisibilityProbeUseCase", () => {
     expect(contested?.citedSamples).toBe(0);
   });
 
+  it("adaptive: stops at the minimum when the reading is already confident", async () => {
+    // A single query that always answers with a self-mention → every sample is
+    // MENTIONED, consensus is 1.0 immediately, so it must stop at the min (2),
+    // never spending the extra budget up to max (5).
+    const model = new FakeModel();
+    let calls = 0;
+    model.ask = async (_query, mode) => {
+      calls++;
+      return { answer: "janus.vote is the one", citations: [], groundingMode: mode };
+    };
+    const runRepository = new FakeRunRepository();
+    const useCase = new RunAiVisibilityProbeUseCase({
+      model,
+      runRepository,
+      samplesPerQuery: 2,
+      maxSamplesPerQuery: 5,
+    });
+
+    const run = await useCase.execute("project-1", { ...TARGET, queries: ["q-mentioned"] }, "parametric");
+
+    expect(calls).toBe(2); // stopped at the min, confident
+    expect(run.outcomes[0].slots).toHaveLength(2);
+  });
+
+  it("adaptive: keeps sampling past the min while the reading is still split", async () => {
+    // First two samples split 1 MENTIONED / 1 CONTESTED → consensus 0.5 at the
+    // min, not confident, so it takes at least one more (up to max 5). Here the
+    // 3rd sample tips it to 2/3 MENTIONED (0.67, confident) and it stops — i.e.
+    // it sampled MORE than the min because the min reading was uncertain.
+    const model = new FakeModel();
+    let calls = 0;
+    model.ask = async (_query, mode) => {
+      calls++;
+      // sample 1: competitor (CONTESTED), 2+: self-mention (MENTIONED)
+      const answer = calls === 1 ? "Polymarket wins" : "janus.vote wins";
+      return { answer, citations: [], groundingMode: mode };
+    };
+    const runRepository = new FakeRunRepository();
+    const useCase = new RunAiVisibilityProbeUseCase({
+      model,
+      runRepository,
+      samplesPerQuery: 2,
+      maxSamplesPerQuery: 5,
+    });
+
+    const run = await useCase.execute("project-1", { ...TARGET, queries: ["q-split"] }, "parametric");
+
+    // Min was 2 (C,M → 0.5, uncertain) so it sampled a 3rd (C,M,M → 0.67) and
+    // stopped — more than the min, fewer than the max.
+    expect(calls).toBe(3);
+    expect(run.outcomes[0].slots).toHaveLength(3);
+  });
+
+  it("adaptive: the attempt cap stops a query whose samples keep throwing (no infinite loop)", async () => {
+    const model = new FakeModel();
+    let calls = 0;
+    model.ask = async () => {
+      calls++;
+      throw new Error("always fails");
+    };
+    const runRepository = new FakeRunRepository();
+    const useCase = new RunAiVisibilityProbeUseCase({
+      model,
+      runRepository,
+      samplesPerQuery: 2,
+      maxSamplesPerQuery: 5,
+      retriesPerSample: 0,
+      retryDelayMs: 0,
+    });
+
+    // One always-failing query: it must give up at the max attempt cap (5),
+    // not loop forever, and the whole probe then measured nothing → throws.
+    await expect(
+      useCase.execute("project-1", { ...TARGET, queries: ["q-fail"] }, "parametric")
+    ).rejects.toThrow("always fails");
+    expect(calls).toBe(5); // capped at max, not infinite
+  });
+
   it("throws and saves nothing when the whole probe measures zero samples", async () => {
     const model = new FakeModel();
     model.ask = async () => {

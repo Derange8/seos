@@ -1,7 +1,7 @@
 import { AiVisibilityProbeRun } from "@/domain/ai-visibility/entities/probe-run";
 import type { ProbeTarget } from "@/domain/ai-visibility/entities/probe-target";
 import type { Slot } from "@/domain/ai-visibility/slot";
-import { detectCompetitors, detectMention } from "@/domain/ai-visibility/slot";
+import { detectCompetitors, detectMention, isConfident } from "@/domain/ai-visibility/slot";
 import { citesDomain } from "@/domain/ai-visibility/citation";
 import type {
   AiVisibilityModelPort,
@@ -18,6 +18,14 @@ export interface RunAiVisibilityProbeDeps {
   // distribution over samples, not a single reading (LLM answers vary run to
   // run — a single shot flips OPEN/CONTESTED unreliably).
   samplesPerQuery?: number;
+  // The MINIMUM samples a query gets; sampling then continues adaptively up to
+  // maxSamplesPerQuery until the reading is confident (see isConfident). Kept as
+  // the historical field name — it's now the floor, not a fixed count.
+  //
+  // maxSamplesPerQuery caps the adaptive growth. Defaults to samplesPerQuery,
+  // i.e. adaptive sampling is OFF unless a caller asks for headroom — a stable
+  // query stops at the min (cheaper), an uncertain one spends up to the max.
+  maxSamplesPerQuery?: number;
   // How many extra attempts a single sample gets if its model call throws
   // (transient 429/timeout/network blip). 0 disables retries.
   retriesPerSample?: number;
@@ -53,11 +61,14 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 // stays honest. Only a run that measured *nothing* throws (no junk 0% row).
 export class RunAiVisibilityProbeUseCase {
   private readonly samplesPerQuery: number;
+  private readonly maxSamplesPerQuery: number;
   private readonly retriesPerSample: number;
   private readonly retryDelayMs: number;
 
   constructor(private readonly deps: RunAiVisibilityProbeDeps) {
     this.samplesPerQuery = deps.samplesPerQuery ?? DEFAULT_SAMPLES;
+    // Never below the min; defaults to the min (adaptive off) when unset.
+    this.maxSamplesPerQuery = Math.max(this.samplesPerQuery, deps.maxSamplesPerQuery ?? this.samplesPerQuery);
     this.retriesPerSample = deps.retriesPerSample ?? DEFAULT_RETRIES_PER_SAMPLE;
     this.retryDelayMs = deps.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
   }
@@ -81,7 +92,18 @@ export class RunAiVisibilityProbeUseCase {
       // surface as "evidence".
       const citationsByUrl = new Map<string, Citation>();
 
-      for (let i = 0; i < this.samplesPerQuery; i++) {
+      // Adaptive sampling: take at least samplesPerQuery, then keep going up to
+      // maxSamplesPerQuery only while the reading is still uncertain — a stable
+      // query stops at the min (no wasted calls), a split one spends more budget
+      // until it either becomes confident or hits the max. `attempts` counts
+      // every call (successes AND failures) against the max so a query whose
+      // samples keep throwing can't loop forever.
+      let attempts = 0;
+      while (attempts < this.maxSamplesPerQuery) {
+        // Stop early once we have the minimum AND a confident reading.
+        if (slots.length >= this.samplesPerQuery && isConfident(slots)) break;
+
+        attempts++;
         const attempt = await this.sample(query, target, mode);
         if (!attempt.ok) {
           lastError = attempt.error;

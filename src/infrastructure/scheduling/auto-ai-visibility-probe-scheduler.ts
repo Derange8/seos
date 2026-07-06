@@ -34,7 +34,15 @@ export function startAutoAiVisibilityProbeScheduler(logger: Logger): { stop(): v
   const runRepository = new PrismaAiVisibilityRunRepository(prisma);
   const experimentRepository = new PrismaVisibilityExperimentRepository(prisma);
   const model = new DynamicAiVisibilityModel(new PrismaLlmSettingsRepository(prisma), logger);
-  const runProbe = new RunAiVisibilityProbeUseCase({ model, runRepository, logger });
+  // Scheduled probes sample adaptively too (min 3, up to 5) — an uncertain
+  // query auto-resolves without the user ever re-measuring.
+  const runProbe = new RunAiVisibilityProbeUseCase({
+    model,
+    runRepository,
+    samplesPerQuery: 3,
+    maxSamplesPerQuery: 5,
+    logger,
+  });
   const resolveExperiments = new ResolveVisibilityExperimentsUseCase({ experimentRepository });
 
   async function tickForProject(project: Project): Promise<void> {
