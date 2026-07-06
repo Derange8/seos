@@ -34,10 +34,15 @@ afterPack: scripts/after-pack.cjs
 asarUnpack:
   - "**/node_modules/better-sqlite3/**"
 
-# electron-builder rebuilds native deps (better-sqlite3) against Electron's
-# own Node ABI automatically as part of packaging — not the system Node
-# used for `npm install` during development.
-npmRebuild: true
+# electron-builder's own automatic native-module rebuild is unreliable in
+# practice — confirmed via a real build where its log claimed
+# "completed installing native dependencies" but the packaged
+# better_sqlite3.node was still the system-Node-ABI build untouched (a
+# stale/skipped rebuild, not a real one). Disabled in favor of an explicit,
+# always-run step (`npm run electron:rebuild-native`, invoked by
+# electron:dist/electron:dist:publish before electron-builder itself runs)
+# that reliably rebuilds it against Electron's ABI every time.
+npmRebuild: false
 
 # GitHub Releases is what electron-updater (see electron/main.ts) polls for
 # new versions. package.json now has a real "repository" field

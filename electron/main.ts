@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, safeStorage } from "electron";
+import { app, BrowserWindow, dialog, shell, safeStorage } from "electron";
 import { autoUpdater } from "electron-updater";
 import log from "electron-log";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -121,26 +121,58 @@ function createWindow(): void {
   mainWindow.loadURL(APP_URL);
 }
 
+// The app is unsigned (no Apple Developer ID certificate — see
+// RELEASING.md), so electron-updater's normal auto-download-and-install
+// flow is a dead end: macOS's native updater (Squirrel.Mac, which
+// electron-updater drives on macOS) refuses to swap in a new bundle
+// unless its code signature matches the old one, and an unsigned app has
+// no signature to match. Confirmed live: a real install correctly found
+// and downloaded a newer real release, then failed at the final "install
+// it" step with a Gatekeeper signature-validation error — no code change
+// upstream of that point can fix it; only a paid Developer ID cert does.
+//
+// Rather than let users hit that failure, this only ever asks
+// electron-updater to CHECK (autoDownload: false) — it never downloads or
+// attempts to install. When a newer version exists, a native dialog offers
+// to open its GitHub release page in the user's normal browser, where the
+// DMG is one click away and installs the ordinary drag-to-Applications
+// way — no signature check applies to a fresh manual install (only to
+// Squirrel.Mac's in-place swap of an already-running app), no hunting for
+// a download link, no terminal.
+function checkForUpdatesManually(): void {
+  autoUpdater.logger = log;
+  autoUpdater.autoDownload = false;
+
+  autoUpdater.on("checking-for-update", () => log.info("Auto-update: checking for update"));
+  autoUpdater.on("update-not-available", (info) => log.info("Auto-update: no update available", info));
+  autoUpdater.on("error", (error) => log.error("Auto-update: error", error));
+
+  autoUpdater.on("update-available", (info) => {
+    log.info("Auto-update: update available", info);
+    const releaseUrl = `https://github.com/Derange8/seos/releases/tag/v${info.version}`;
+    dialog
+      .showMessageBox({
+        type: "info",
+        title: "Update available",
+        message: `Seos ${info.version} is available (you have ${app.getVersion()}).`,
+        detail: "Opens the release page in your browser — download the installer and drag it into Applications as usual.",
+        buttons: ["Open release page", "Later"],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then((result) => {
+        if (result.response === 0) shell.openExternal(releaseUrl);
+      });
+  });
+
+  autoUpdater.checkForUpdates().catch((error) => log.error("Auto-update check failed", error));
+}
+
 app.whenReady().then(async () => {
   try {
     await startNextServer();
     createWindow();
-
-    // electron-updater logs to plain console by default, which goes
-    // nowhere useful in a packaged GUI app (no attached terminal) — wiring
-    // it into electron-log is what actually makes checking/available/
-    // not-available/error events show up in main.log at all. Without
-    // this, "did the update check even run" was previously unanswerable
-    // from the log alone.
-    autoUpdater.logger = log;
-    autoUpdater.on("checking-for-update", () => log.info("Auto-update: checking for update"));
-    autoUpdater.on("update-available", (info) => log.info("Auto-update: update available", info));
-    autoUpdater.on("update-not-available", (info) => log.info("Auto-update: no update available", info));
-    autoUpdater.on("error", (error) => log.error("Auto-update: error", error));
-    autoUpdater.on("download-progress", (progress) => log.info("Auto-update: download progress", progress));
-    autoUpdater.on("update-downloaded", (info) => log.info("Auto-update: update downloaded", info));
-
-    autoUpdater.checkForUpdatesAndNotify().catch((error) => log.error("Auto-update check failed", error));
+    checkForUpdatesManually();
   } catch (error) {
     log.error("Failed to start Seos", error);
     app.quit();

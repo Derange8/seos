@@ -1,8 +1,11 @@
 # Releasing a new version
 
 Seos ships as a packaged Electron app (macOS/Windows/Linux) that checks
-`Derange8/seos`'s GitHub Releases for updates on every launch
-(`autoUpdater.checkForUpdatesAndNotify()` in `electron/main.ts`).
+`Derange8/seos`'s GitHub Releases for updates on every launch. **It never
+auto-downloads or auto-installs** (see "Why manual, not automatic" below)
+— it only checks, and if a newer version exists, offers to open its GitHub
+release page in the user's browser, where the installer is one click away
+and installs the normal drag-to-Applications way.
 
 **Verified end-to-end on 2026-07-06** by actually publishing `v0.1.1` and
 `v0.1.2` and confirming the real anonymous feed URL electron-updater uses
@@ -92,7 +95,9 @@ anonymous feed request cannot see at all (drafts aren't returned by
      certificate configured) — this is a deliberate, already-made scope
      decision (see project notes: code signing is out of scope until
      public distribution, "friends, for now"). Recipients will see an
-     OS unsigned-app warning on first launch.
+     OS unsigned-app warning on first launch, and installed apps won't
+     self-update in place — see "Why manual, not automatic" below for why
+     that's handled deliberately rather than left broken.
 
 ## Verifying the update actually works
 
@@ -156,11 +161,11 @@ used elsewhere in `main.ts`) plus explicit listeners on
 `checking-for-update`/`update-available`/`update-not-available`/`error`/
 `download-progress`/`update-downloaded`.
 
-### The one remaining, expected limitation: unsigned installs can't self-update
+### Why manual, not automatic: unsigned apps can't self-install via Squirrel
 
-With all four fixes in place, a real `v0.1.1` install correctly found,
-downloaded, and attempted to install `v0.1.2` — and then hit a real macOS
-Gatekeeper rejection at the final install step:
+With bugs 1-3 fixed, a real `v0.1.1` install correctly found, downloaded,
+and attempted to auto-install `v0.1.2` — and hit a real macOS Gatekeeper
+rejection at the final install step:
 
 ```
 Error: Code signature at URL file:///.../Seos.app/ did not pass validation:
@@ -168,32 +173,48 @@ kodda kaynak yok ama imza olması gerektiğini belirtiyor
 ```
 
 This is **expected, not a bug**: macOS's native updater mechanism
-(Squirrel.Mac, which electron-updater uses under the hood on macOS)
+(Squirrel.Mac, which electron-updater drives under the hood on macOS)
 requires the old and new app bundles to have a valid, matching code
 signature before it will swap them in place — an unsigned app fails this
-check by design, regardless of how correct everything upstream of it is.
-Code signing (an Apple Developer ID certificate, $99/yr program
-membership) remains the same deliberate, already-scoped-out item it was
-before this session — "out of scope until public distribution." **The
-practical takeaway**: right now, a friend who installs a build can be
-told a new version exists (the app-side detection genuinely works), but
-they'll need to manually download and reinstall the new DMG themselves
-until code signing is added — auto-install won't complete on its own.
+check by design, no matter how correct everything upstream of it is. Code
+signing (an Apple Developer ID certificate, $99/yr program membership)
+remains out of scope for now.
 
-### Also fixed in the same pass: local dev/test breakage after building for distribution
+**Rather than let users hit that failure, `electron/main.ts` deliberately
+never lets electron-updater auto-download or auto-install at all**
+(`autoUpdater.autoDownload = false`, and only `checkForUpdates()` is
+called — never `checkForUpdatesAndNotify()` or `downloadUpdate()`). When a
+newer version exists, a native dialog offers "Open release page", which
+opens `github.com/Derange8/seos/releases/tag/vX.Y.Z` in the user's normal
+browser via `shell.openExternal` — downloading and installing a DMG fresh
+is an ordinary drag-to-Applications action with no signature check
+involved (that check only applies to Squirrel.Mac's in-place swap of an
+already-running app, never to installing a DMG by hand). **Verified live**:
+a real `v0.1.1` install showed the dialog, and clicking "Open release
+page" opened the real `v0.1.2` release page in the browser.
 
-`electron-builder`'s own `npmRebuild: true` step rebuilds the root
-`node_modules/better-sqlite3` against **Electron's** Node ABI as a side
-effect of packaging — which then breaks `npm test`/`next dev` locally
-(they use the system Node's own, different ABI) until it's rebuilt back.
-`electron:dev` already had a `postelectron:dev` script for this; the same
-was missing for `electron:dist`/`electron:dist:publish` and has been
-added (`postelectron:dist`/`postelectron:dist:publish`, both just
-`npm rebuild better-sqlite3`). If tests ever fail with an
-`ERR_DLOPEN_FAILED`/`NODE_MODULE_VERSION` mismatch after running a dist
-build directly (bypassing npm's post-script convention, e.g. calling
-`electron-builder` directly rather than via `npm run`), that's this —
-run `npm rebuild better-sqlite3` to fix it.
+### Also fixed in the same pass: electron-builder's own native-rebuild step is unreliable
+
+`electron-builder`'s `npmRebuild: true` is *supposed* to rebuild
+`node_modules/better-sqlite3` against Electron's Node ABI automatically —
+but a real build showed its log claiming "completed installing native
+dependencies" while the packaged `better_sqlite3.node` was still built for
+the system Node ABI (untouched), which crashed the packaged app on launch
+with an `ERR_DLOPEN_FAILED`/`NODE_MODULE_VERSION` mismatch. **Disabled**
+(`npmRebuild: false` in `electron-builder.yml`) in favor of an explicit,
+always-run step: `npm run electron:rebuild-native` (extracted from what
+`electron:dev` already did inline) now runs before `electron-builder`
+itself in both `electron:dist` and `electron:dist:publish`.
+
+This step rebuilds the root `node_modules/better-sqlite3` against
+**Electron's** ABI, which breaks local `npm test`/`next dev` (system
+Node's own, different ABI) until rebuilt back — `postelectron:dist` /
+`postelectron:dist:publish` (both `npm rebuild better-sqlite3`) handle
+that automatically once packaging finishes, mirroring `electron:dev`'s
+existing `postelectron:dev`. If tests ever fail with an
+`ERR_DLOPEN_FAILED`/`NODE_MODULE_VERSION` mismatch after a dist build run
+outside of `npm run` (bypassing the post-script), that's this — run
+`npm rebuild better-sqlite3` to fix it.
 
 ## Local build sanity check (no publish, no GH_TOKEN)
 
@@ -202,6 +223,7 @@ To confirm the build chain itself works without touching GitHub:
 ```bash
 npm run build
 npm run electron:build-main
+npm run electron:rebuild-native
 npx electron-builder --dir --publish never
 ```
 

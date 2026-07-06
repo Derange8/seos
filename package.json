@@ -14,11 +14,12 @@
     "lint": "eslint",
     "test": "vitest run",
     "electron:build-main": "node scripts/build-electron.mjs",
-    "electron:dev": "npm run build && npm run electron:build-main && rm -rf node_modules/better-sqlite3/build && electron-rebuild -f -w better-sqlite3 --build-from-source && rm -rf .next/standalone/node_modules/better-sqlite3 && cp -r node_modules/better-sqlite3 .next/standalone/node_modules/better-sqlite3 && electron .",
+    "electron:rebuild-native": "rm -rf node_modules/better-sqlite3/build && electron-rebuild -f -w better-sqlite3 --build-from-source && rm -rf .next/standalone/node_modules/better-sqlite3 && cp -r node_modules/better-sqlite3 .next/standalone/node_modules/better-sqlite3",
+    "electron:dev": "npm run build && npm run electron:build-main && npm run electron:rebuild-native && electron .",
     "postelectron:dev": "npm rebuild better-sqlite3",
-    "electron:dist": "npm run build && npm run electron:build-main && electron-builder",
+    "electron:dist": "npm run build && npm run electron:build-main && npm run electron:rebuild-native && electron-builder",
     "postelectron:dist": "npm rebuild better-sqlite3",
-    "electron:dist:publish": "npm run build && npm run electron:build-main && electron-builder --publish always",
+    "electron:dist:publish": "npm run build && npm run electron:build-main && npm run electron:rebuild-native && electron-builder --publish always",
     "postelectron:dist:publish": "npm rebuild better-sqlite3"
   },
   "dependencies": {
