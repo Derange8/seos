@@ -19,6 +19,7 @@ import { DetectBrokenLinksUseCase } from "@/application/crawling/use-cases/detec
 import { DetectDuplicateContentUseCase } from "@/application/crawling/use-cases/detect-duplicate-content-use-case";
 import { DetectOrphanPagesUseCase } from "@/application/crawling/use-cases/detect-orphan-pages-use-case";
 import { AuditRobotsAndSitemapUseCase } from "@/application/crawling/use-cases/audit-robots-and-sitemap-use-case";
+import { DetectHreflangReciprocityUseCase } from "@/application/crawling/use-cases/detect-hreflang-reciprocity-use-case";
 import { CrawlJobCompleted } from "@/domain/crawling/events/crawl-job-completed";
 import { AuditRunCompleted } from "@/domain/auditing/events/audit-run-completed";
 import { PrismaAuditRunRepository } from "@/infrastructure/persistence/prisma/prisma-audit-run-repository";
@@ -87,6 +88,7 @@ export function createCrawlPipeline(
   const detectBrokenLinks = new DetectBrokenLinksUseCase({ pageRepository });
   const detectDuplicateContent = new DetectDuplicateContentUseCase({ pageRepository });
   const detectOrphanPages = new DetectOrphanPagesUseCase({ pageRepository });
+  const detectHreflangReciprocity = new DetectHreflangReciprocityUseCase({ pageRepository });
   const auditRobotsAndSitemap = new AuditRobotsAndSitemapUseCase({
     pageRepository,
     robots: new HttpRobotsFetcher({ allowPrivateNetworks: options.allowPrivateNetworks }),
@@ -166,13 +168,14 @@ export function createCrawlPipeline(
   // enrichment is the one exception — a real LLM call, slow and fallible
   // in ways nothing else here is, so it only enqueues onto its own queue.
   //
-  // detectBrokenLinks, detectDuplicateContent, detectOrphanPages, and
-  // auditRobotsAndSitemap are the ordering exception: DomainEventDispatcher
-  // runs same-event handlers sequentially in registration order (see
-  // dispatch()), and several rules (broken-internal-links,
-  // duplicate-title/meta/content, orphan-page, robots-blocks-entire-site/
+  // detectBrokenLinks, detectDuplicateContent, detectOrphanPages,
+  // detectHreflangReciprocity, and auditRobotsAndSitemap are the ordering
+  // exception: DomainEventDispatcher runs same-event handlers sequentially
+  // in registration order (see dispatch()), and several rules
+  // (broken-internal-links, duplicate-title/meta/content, orphan-page,
+  // hreflang-missing-return-tag, robots-blocks-entire-site/
   // robots-missing-sitemap-directive/sitemap-unreachable/sitemap-invalid-xml)
-  // read flags only these four set — so all four must run and finish
+  // read flags only these five set — so all five must run and finish
   // before runAudit, not just be independent of it.
   eventDispatcher.on(CrawlJobCompleted, async (event) => {
     await detectBrokenLinks.execute(event.projectId, event.crawlJobId);
@@ -182,6 +185,9 @@ export function createCrawlPipeline(
   });
   eventDispatcher.on(CrawlJobCompleted, async (event) => {
     await detectOrphanPages.execute(event.projectId, event.crawlJobId);
+  });
+  eventDispatcher.on(CrawlJobCompleted, async (event) => {
+    await detectHreflangReciprocity.execute(event.projectId, event.crawlJobId);
   });
   eventDispatcher.on(CrawlJobCompleted, async (event) => {
     await auditRobotsAndSitemap.execute(event.projectId, event.crawlJobId);

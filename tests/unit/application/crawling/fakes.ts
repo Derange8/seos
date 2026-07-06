@@ -168,6 +168,7 @@ export function emptyParsedContent(overrides: Partial<ParsedPageContent> = {}): 
     canonicalTagCount: 0,
     isNoindex: false,
     externalScriptOrigins: [],
+    hreflangLinks: [],
     ...overrides,
   };
 }

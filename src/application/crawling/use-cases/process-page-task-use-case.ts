@@ -199,6 +199,7 @@ export class ProcessPageTaskUseCase {
       isNoindex: parsed.isNoindex,
       cspHeader: fetched.cspHeader,
       externalScriptOrigins: parsed.externalScriptOrigins,
+      hreflangLinks: parsed.hreflangLinks,
       rawWordCount,
       isClientSideOnlyContent,
       lcpMs,

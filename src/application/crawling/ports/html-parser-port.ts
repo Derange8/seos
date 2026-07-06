@@ -1,5 +1,5 @@
 import type { Url } from "@/domain/crawling/value-objects/url";
-import type { Faq } from "@/domain/crawling/entities/page";
+import type { Faq, HreflangLink } from "@/domain/crawling/entities/page";
 
 export interface ParsedPageContent {
   title: string | null;
@@ -68,6 +68,11 @@ export interface ParsedPageContent {
   // CSP, so only cross-origin ones are worth recording. Feeds the
   // csp-blocks-script audit rule, paired with Page.cspHeader.
   externalScriptOrigins: readonly string[];
+  // Every <link rel="alternate" hreflang="..."> tag on the page, resolved
+  // to absolute URLs. Feeds the hreflang-missing-return-tag audit rule
+  // (via DetectHreflangReciprocityUseCase, a cross-page check — see
+  // Page.hreflangMissingReturnTags).
+  hreflangLinks: readonly HreflangLink[];
 }
 
 export interface HtmlParserPort {

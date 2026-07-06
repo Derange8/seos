@@ -165,6 +165,14 @@ model Page {
   lcpMs                        Int?
   cls                          Float?
   tbtMs                        Int?
+  // Every <link rel="alternate" hreflang="..."> tag this page declares, as
+  // a JSON array of { hreflang, url }. Feeds the
+  // hreflang-missing-return-tag audit rule (via
+  // DetectHreflangReciprocityUseCase).
+  hreflangLinks                Json           @default("[]")
+  // Subset of hreflangLinks above whose target does not link back —
+  // computed post-crawl, same as hreflangLinks' own consumer.
+  hreflangMissingReturnTags    Json           @default("[]")
   links                       Link[]
   auditIssues                 AuditIssue[]
   schemaMarkups               SchemaMarkup[]

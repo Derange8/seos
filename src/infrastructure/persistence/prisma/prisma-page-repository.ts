@@ -4,7 +4,7 @@ import type {
   Link as PrismaLinkRow,
 } from "@/generated/prisma/client";
 import type { PageRepositoryPort } from "@/application/crawling/ports/page-repository-port";
-import { Page, type Faq, type PageProps } from "@/domain/crawling/entities/page";
+import { Page, type Faq, type HreflangLink, type PageProps } from "@/domain/crawling/entities/page";
 import { Link } from "@/domain/crawling/entities/link";
 import { Url } from "@/domain/crawling/value-objects/url";
 import { sqliteWriteLock } from "@/shared/async-mutex";
@@ -51,6 +51,20 @@ function toDomainStructuredDataTypes(raw: unknown): string[] {
   return raw.filter((entry): entry is string => typeof entry === "string");
 }
 
+// Same defensive coercion as toDomainFaqs — hreflang link lists are also
+// plain JSON columns, shared by both hreflangLinks and
+// hreflangMissingReturnTags since they're the same shape.
+function toDomainHreflangLinks(raw: unknown): HreflangLink[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (entry): entry is HreflangLink =>
+      typeof entry === "object" &&
+      entry !== null &&
+      typeof (entry as Record<string, unknown>).hreflang === "string" &&
+      typeof (entry as Record<string, unknown>).url === "string"
+  );
+}
+
 function toDomain(row: PrismaPageRow & { links: PrismaLinkRow[] }): Page {
   const props: PageProps = {
     id: row.id,
@@ -91,6 +105,8 @@ function toDomain(row: PrismaPageRow & { links: PrismaLinkRow[] }): Page {
     lcpMs: row.lcpMs,
     cls: row.cls,
     tbtMs: row.tbtMs,
+    hreflangLinks: toDomainHreflangLinks(row.hreflangLinks),
+    hreflangMissingReturnTags: toDomainHreflangLinks(row.hreflangMissingReturnTags),
   };
 
   const links = row.links.map((linkRow) =>
@@ -145,6 +161,11 @@ export class PrismaPageRepository implements PageRepositoryPort {
       lcpMs: page.lcpMs,
       cls: page.cls,
       tbtMs: page.tbtMs,
+      hreflangLinks: page.hreflangLinks.map((link) => ({ hreflang: link.hreflang, url: link.url })),
+      hreflangMissingReturnTags: page.hreflangMissingReturnTags.map((link) => ({
+        hreflang: link.hreflang,
+        url: link.url,
+      })),
       crawledAt: page.crawledAt,
     };
 

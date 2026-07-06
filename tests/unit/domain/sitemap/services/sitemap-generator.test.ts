@@ -86,6 +86,8 @@ describe("selectSitemapEntries", () => {
         lcpMs: null,
         cls: null,
         tbtMs: null,
+        hreflangLinks: [],
+        hreflangMissingReturnTags: [],
       },
       []
     );

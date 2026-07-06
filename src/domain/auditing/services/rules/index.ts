@@ -31,6 +31,7 @@ import { sitemapInvalidXmlRule } from "@/domain/auditing/services/rules/sitemap-
 import { poorLcpRule } from "@/domain/auditing/services/rules/poor-lcp-rule";
 import { poorClsRule } from "@/domain/auditing/services/rules/poor-cls-rule";
 import { poorTbtRule } from "@/domain/auditing/services/rules/poor-tbt-rule";
+import { hreflangMissingReturnTagRule } from "@/domain/auditing/services/rules/hreflang-missing-return-tag-rule";
 
 // The plugin registry — adding a rule means writing one AuditRule and
 // listing it here, nothing else in the engine needs to change.
@@ -67,4 +68,5 @@ export const DEFAULT_AUDIT_RULES: readonly AuditRule[] = [
   poorLcpRule,
   poorClsRule,
   poorTbtRule,
+  hreflangMissingReturnTagRule,
 ];

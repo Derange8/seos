@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import * as cheerio from "cheerio";
 import type { HtmlParserPort, ParsedPageContent } from "@/application/crawling/ports/html-parser-port";
-import type { Faq } from "@/domain/crawling/entities/page";
+import type { Faq, HreflangLink } from "@/domain/crawling/entities/page";
 import type { Url } from "@/domain/crawling/value-objects/url";
 
 // Long enough to give the growth-analysis LLM call (which reasons about a
@@ -198,6 +198,25 @@ function extractExternalScriptOrigins($: cheerio.CheerioAPI, baseUrl: Url): stri
   return Array.from(origins);
 }
 
+// Every <link rel="alternate" hreflang="..."> tag, resolved to an absolute
+// URL — hreflang is case-insensitive per the spec (both the "hreflang"
+// attribute value and, in practice, some CMSes emit "x-default" with
+// varying case), so the raw value is lowercased here once rather than at
+// every call site that compares it. A tag with no href or an unresolvable
+// one is skipped rather than kept with a null URL — an hreflang entry
+// pointing nowhere can't participate in the reciprocity check anyway.
+function extractHreflangLinks($: cheerio.CheerioAPI, baseUrl: Url): HreflangLink[] {
+  const links: HreflangLink[] = [];
+  $('link[rel="alternate"][hreflang]').each((_index, element) => {
+    const hreflang = $(element).attr("hreflang")?.trim().toLowerCase();
+    const resolved = resolveHref($(element).attr("href"), baseUrl);
+    if (hreflang && resolved) {
+      links.push({ hreflang, url: resolved });
+    }
+  });
+  return links;
+}
+
 // Directives are comma-separated (e.g. "noindex, nofollow") — splitting and
 // trimming each one avoids a false negative against "noindexfoo" while
 // still matching regardless of surrounding whitespace or casing.
@@ -251,6 +270,7 @@ export class CheerioHtmlParser implements HtmlParserPort {
       canonicalTagCount: $('link[rel="canonical"]').length,
       isNoindex: detectNoindex($),
       externalScriptOrigins: extractExternalScriptOrigins($, baseUrl),
+      hreflangLinks: extractHreflangLinks($, baseUrl),
     };
   }
 }

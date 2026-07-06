@@ -355,6 +355,55 @@ describe("CheerioHtmlParser", () => {
     });
   });
 
+  describe("hreflangLinks", () => {
+    it("extracts a single hreflang alternate link, resolved to an absolute URL", () => {
+      const html = `<head><link rel="alternate" hreflang="tr" href="/tr/"></head>`;
+      const result = parser.parse(html, baseUrl);
+      expect(result.hreflangLinks).toEqual([{ hreflang: "tr", url: "https://example.com/tr/" }]);
+    });
+
+    it("extracts multiple hreflang alternate links", () => {
+      const html = `
+        <head>
+          <link rel="alternate" hreflang="en" href="https://example.com/en/">
+          <link rel="alternate" hreflang="tr" href="https://example.com/tr/">
+          <link rel="alternate" hreflang="x-default" href="https://example.com/">
+        </head>
+      `;
+      const result = parser.parse(html, baseUrl);
+      expect(result.hreflangLinks).toEqual([
+        { hreflang: "en", url: "https://example.com/en/" },
+        { hreflang: "tr", url: "https://example.com/tr/" },
+        { hreflang: "x-default", url: "https://example.com/" },
+      ]);
+    });
+
+    it("lowercases the hreflang value", () => {
+      const html = `<head><link rel="alternate" hreflang="TR-tr" href="/tr/"></head>`;
+      const result = parser.parse(html, baseUrl);
+      expect(result.hreflangLinks).toEqual([{ hreflang: "tr-tr", url: "https://example.com/tr/" }]);
+    });
+
+    it("ignores an alternate link with no hreflang attribute", () => {
+      const html = `<head><link rel="alternate" href="/tr/"></head>`;
+      expect(parser.parse(html, baseUrl).hreflangLinks).toEqual([]);
+    });
+
+    it("ignores a hreflang link with no href", () => {
+      const html = `<head><link rel="alternate" hreflang="tr"></head>`;
+      expect(parser.parse(html, baseUrl).hreflangLinks).toEqual([]);
+    });
+
+    it("is empty for a page with no hreflang links", () => {
+      expect(parser.parse("<head></head>", baseUrl).hreflangLinks).toEqual([]);
+    });
+
+    it("ignores a non-alternate link even if it has hreflang", () => {
+      const html = `<head><link rel="stylesheet" hreflang="tr" href="/style.css"></head>`;
+      expect(parser.parse(html, baseUrl).hreflangLinks).toEqual([]);
+    });
+  });
+
   describe("faqs", () => {
     it("pairs a heading ending in '?' with the text that follows it", () => {
       const html = `

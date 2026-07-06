@@ -6,6 +6,13 @@ export interface Faq {
   answer: string;
 }
 
+export interface HreflangLink {
+  // Lowercased per extractHreflangLinks — hreflang comparisons throughout
+  // (parsing, the reciprocity check) are all case-insensitive.
+  hreflang: string;
+  url: string;
+}
+
 export interface PageAttributes {
   statusCode?: number | null;
   title?: string | null;
@@ -133,6 +140,20 @@ export interface PageAttributes {
   // WebVitalsMeasurement.tbtMs for why INP itself isn't measurable from an
   // unattended crawl).
   tbtMs?: number | null;
+  // Every <link rel="alternate" hreflang="..."> tag this page declares
+  // (see ParsedPageContent.hreflangLinks) — the page's own outbound half
+  // of its hreflang cluster. Empty for a page with no hreflang tags at
+  // all, which is fine (not every page needs to be part of one).
+  hreflangLinks?: readonly HreflangLink[];
+  // Which of this page's own hreflangLinks point at a target that does
+  // NOT link back — computed post-crawl by DetectHreflangReciprocityUseCase
+  // (cross-page, like hasDuplicateTitle/isOrphan above), since checking
+  // requires having crawled the target page too. Google's hreflang spec
+  // requires every pair to be reciprocal; a one-way link is silently
+  // ignored entirely, which is exactly the kind of invisible failure no
+  // page-level check alone can catch. Empty when hreflangLinks is empty or
+  // every link is reciprocated.
+  hreflangMissingReturnTags?: readonly HreflangLink[];
 }
 
 export interface PageProps extends Required<PageAttributes> {
@@ -187,6 +208,8 @@ export class Page {
       lcpMs: attributes.lcpMs ?? null,
       cls: attributes.cls ?? null,
       tbtMs: attributes.tbtMs ?? null,
+      hreflangLinks: attributes.hreflangLinks ?? [],
+      hreflangMissingReturnTags: attributes.hreflangMissingReturnTags ?? [],
     });
   }
 
@@ -357,6 +380,21 @@ export class Page {
 
   get tbtMs(): number | null {
     return this.props.tbtMs;
+  }
+
+  get hreflangLinks(): readonly HreflangLink[] {
+    return this.props.hreflangLinks;
+  }
+
+  get hreflangMissingReturnTags(): readonly HreflangLink[] {
+    return this.props.hreflangMissingReturnTags;
+  }
+
+  // Recomputed wholesale on every DetectHreflangReciprocityUseCase run,
+  // same rationale as setDuplicateFlags/setOrphan — a target page's own
+  // hreflang tags can change between crawls.
+  setHreflangMissingReturnTags(missing: readonly HreflangLink[]): void {
+    this.props.hreflangMissingReturnTags = missing;
   }
 
   // Recomputed wholesale on every AuditRobotsAndSitemapUseCase run, same
