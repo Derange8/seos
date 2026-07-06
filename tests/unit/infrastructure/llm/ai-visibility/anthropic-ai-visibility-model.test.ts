@@ -15,9 +15,11 @@ describe("AnthropicAiVisibilityModel", () => {
     vi.stubGlobal("fetch", fetchMock);
     const model = new AnthropicAiVisibilityModel({ apiKey: "claude-key" });
 
-    const answer = await model.ask("q");
+    const result = await model.ask("q", "parametric");
 
-    expect(answer).toBe("Polymarket");
+    expect(result.answer).toBe("Polymarket");
+    expect(result.groundingMode).toBe("parametric");
+    expect(result.citations).toEqual([]);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.anthropic.com/v1/messages");
     expect(init.headers).toMatchObject({ "x-api-key": "claude-key", "anthropic-version": "2023-06-01" });
@@ -25,6 +27,32 @@ describe("AnthropicAiVisibilityModel", () => {
     expect(body.model).toBe("claude-3-5-haiku-latest");
     expect(body.messages).toEqual([{ role: "user", content: "q" }]);
     expect(body.system).toBeUndefined();
+    // Parametric mode must not enable the web-search tool.
+    expect(body.tools).toBeUndefined();
+  });
+
+  it("web_grounded ask enables the web_search tool and extracts citations from text blocks", async () => {
+    const grounded = new Response(
+      JSON.stringify({
+        content: [
+          { type: "text", text: "Janus", citations: [{ url: "https://janus.vote/a", title: "Janus" }] },
+          { type: "text", text: " is solid.", citations: [{ url: "https://janus.vote/a" }] },
+        ],
+      }),
+      { status: 200 }
+    );
+    const fetchMock = vi.fn().mockResolvedValue(grounded);
+    vi.stubGlobal("fetch", fetchMock);
+    const model = new AnthropicAiVisibilityModel({ apiKey: "k" });
+
+    const result = await model.ask("q", "web_grounded");
+
+    // Text blocks are joined; duplicate citation url is de-duped.
+    expect(result.answer).toBe("Janus is solid.");
+    expect(result.groundingMode).toBe("web_grounded");
+    expect(result.citations).toEqual([{ url: "https://janus.vote/a", title: "Janus" }]);
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.tools).toEqual([{ type: "web_search_20250305", name: "web_search" }]);
   });
 
   it("namesSpecificOption sends a classifier system prompt at temperature 0 and parses the verdict", async () => {
@@ -79,7 +107,7 @@ describe("AnthropicAiVisibilityModel", () => {
 
   it("throws on a non-ok response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("rate limited", { status: 429 })));
-    await expect(new AnthropicAiVisibilityModel({ apiKey: "k" }).ask("q")).rejects.toThrow(/429/);
+    await expect(new AnthropicAiVisibilityModel({ apiKey: "k" }).ask("q", "parametric")).rejects.toThrow(/429/);
   });
 
   it("aborts and throws a timeout error when the request hangs past timeoutMs", async () => {
@@ -92,6 +120,6 @@ describe("AnthropicAiVisibilityModel", () => {
     vi.stubGlobal("fetch", hangingFetch);
     const model = new AnthropicAiVisibilityModel({ apiKey: "k", timeoutMs: 10 });
 
-    await expect(model.ask("q")).rejects.toThrow(/timed out after 10ms/);
+    await expect(model.ask("q", "parametric")).rejects.toThrow(/timed out after 10ms/);
   });
 });

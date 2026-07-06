@@ -29,7 +29,7 @@ describe("DynamicAiVisibilityModel", () => {
     vi.stubGlobal("fetch", fetchMock);
     const model = new DynamicAiVisibilityModel(repositoryReturning(null), noopLogger);
 
-    await expect(model.ask("q")).rejects.toBeInstanceOf(AiVisibilityProviderNotConfiguredError);
+    await expect(model.ask("q", "parametric")).rejects.toBeInstanceOf(AiVisibilityProviderNotConfiguredError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -38,7 +38,7 @@ describe("DynamicAiVisibilityModel", () => {
     vi.stubGlobal("fetch", fetchMock);
     const model = new DynamicAiVisibilityModel(repositoryReturning(LlmSettings.create("openai", "sk-key", null)), noopLogger);
 
-    await model.ask("q");
+    await model.ask("q", "parametric");
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.openai.com/v1/chat/completions");
@@ -50,7 +50,7 @@ describe("DynamicAiVisibilityModel", () => {
     vi.stubGlobal("fetch", fetchMock);
     const model = new DynamicAiVisibilityModel(repositoryReturning(LlmSettings.create("deepseek", "ds-key", null)), noopLogger);
 
-    await model.ask("q");
+    await model.ask("q", "parametric");
 
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toBe("https://api.deepseek.com/v1/chat/completions");
@@ -63,7 +63,7 @@ describe("DynamicAiVisibilityModel", () => {
     vi.stubGlobal("fetch", fetchMock);
     const model = new DynamicAiVisibilityModel(repositoryReturning(LlmSettings.create("anthropic", "claude-key", null)), noopLogger);
 
-    await model.ask("q");
+    await model.ask("q", "parametric");
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(init.headers).toMatchObject({ "x-api-key": "claude-key" });
@@ -94,8 +94,8 @@ describe("DynamicAiVisibilityModel", () => {
     const repository = repositoryReturning(LlmSettings.create("openai", "sk-key", null));
     const model = new DynamicAiVisibilityModel(repository, noopLogger);
 
-    await model.ask("q1");
-    await model.ask("q2");
+    await model.ask("q1", "parametric");
+    await model.ask("q2", "parametric");
 
     expect(repository.find).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);

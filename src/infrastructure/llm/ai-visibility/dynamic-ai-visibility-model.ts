@@ -1,7 +1,9 @@
 import type {
   AiVisibilityModelPort,
+  AskResult,
   CitationContentInput,
   CitationDraft,
+  GroundingMode,
   ProbeTargetSuggestion,
   ProbeTargetSuggestionInput,
   VisibilityGapInput,
@@ -19,11 +21,21 @@ const DEEPSEEK_DEFAULT_MODEL = "deepseek-chat";
 function createModelFor(provider: LlmProvider, apiKey: string, model: string | null): AiVisibilityModelPort {
   switch (provider) {
     case "openai":
-      return new OpenAiAiVisibilityModel({ apiKey, model: model ?? undefined });
+      // Real OpenAI supports web search (a native tool) → enable web-grounded.
+      return new OpenAiAiVisibilityModel({ apiKey, model: model ?? undefined, supportsWebSearch: true });
     case "anthropic":
+      // Anthropic's Messages API has its own web_search tool, enabled per-call.
       return new AnthropicAiVisibilityModel({ apiKey, model: model ?? undefined });
     case "deepseek":
-      return new OpenAiAiVisibilityModel({ apiKey, model: model ?? DEEPSEEK_DEFAULT_MODEL, baseUrl: DEEPSEEK_API_URL });
+      // DeepSeek is only OpenAI-COMPATIBLE (chat surface) — no web search. Leave
+      // supportsWebSearch off so a web_grounded probe honestly rejects here
+      // instead of silently answering from memory.
+      return new OpenAiAiVisibilityModel({
+        apiKey,
+        model: model ?? DEEPSEEK_DEFAULT_MODEL,
+        baseUrl: DEEPSEEK_API_URL,
+        supportsWebSearch: false,
+      });
   }
 }
 
@@ -57,8 +69,8 @@ export class DynamicAiVisibilityModel implements AiVisibilityModelPort {
     return this.resolved;
   }
 
-  async ask(query: string): Promise<string> {
-    return (await this.resolve()).ask(query);
+  async ask(query: string, mode: GroundingMode): Promise<AskResult> {
+    return (await this.resolve()).ask(query, mode);
   }
 
   async namesSpecificOption(answer: string): Promise<boolean> {

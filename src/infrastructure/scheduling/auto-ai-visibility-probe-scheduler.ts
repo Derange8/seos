@@ -68,7 +68,9 @@ export function startAutoAiVisibilityProbeScheduler(logger: Logger): { stop(): v
     });
 
     try {
-      const run = await runProbe.execute(project.id, target);
+      // Scheduled (Otomatik Pilot) probes measure the real AI-search surface,
+      // same as a user-triggered probe — the whole point is an honest trend.
+      const run = await runProbe.execute(project.id, target, "web_grounded");
       await resolveExperiments.execute(project.id, run);
     } catch (error) {
       logger.error("Otomatik Pilot: scheduled AI-visibility probe failed", {

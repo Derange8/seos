@@ -9,8 +9,9 @@ function runWith(query: string): AiVisibilityProbeRun {
     id: "r1",
     projectId: "p1",
     samplesPerQuery: 2,
+    groundingMode: "parametric",
     runAt: new Date("2026-07-01"),
-    outcomes: [{ query, slots: ["CONTESTED", "CONTESTED"], competitorsMentioned: ["Polymarket"] }],
+    outcomes: [{ query, slots: ["CONTESTED", "CONTESTED"], competitorsMentioned: ["Polymarket"], citedSamples: 0, citations: [] }],
   });
 }
 

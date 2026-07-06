@@ -10,6 +10,7 @@ function laterRun(outcomes: QueryOutcome[]): AiVisibilityProbeRun {
     id: "r2",
     projectId: "p1",
     samplesPerQuery: 2,
+    groundingMode: "parametric",
     runAt: new Date(Date.now() + 86_400_000),
     outcomes,
   });
@@ -21,7 +22,7 @@ describe("ResolveVisibilityExperimentsUseCase", () => {
     await experimentRepository.save(VisibilityExperiment.start("p1", "q1", "CONTESTED", new Date("2026-07-01")));
     const useCase = new ResolveVisibilityExperimentsUseCase({ experimentRepository });
 
-    await useCase.execute("p1", laterRun([{ query: "q1", slots: ["MENTIONED", "MENTIONED"], competitorsMentioned: [] }]));
+    await useCase.execute("p1", laterRun([{ query: "q1", slots: ["MENTIONED", "MENTIONED"], competitorsMentioned: [], citedSamples: 0, citations: [] }]));
 
     const [resolved] = await experimentRepository.findByProjectId("p1");
     expect(resolved.status).toBe("RESOLVED");
@@ -33,7 +34,7 @@ describe("ResolveVisibilityExperimentsUseCase", () => {
     await experimentRepository.save(VisibilityExperiment.start("p1", "q1", "CONTESTED", new Date("2026-07-01")));
     const useCase = new ResolveVisibilityExperimentsUseCase({ experimentRepository });
 
-    await useCase.execute("p1", laterRun([{ query: "other", slots: ["OPEN"], competitorsMentioned: [] }]));
+    await useCase.execute("p1", laterRun([{ query: "other", slots: ["OPEN"], competitorsMentioned: [], citedSamples: 0, citations: [] }]));
 
     expect(await experimentRepository.findOpenByProjectId("p1")).toHaveLength(1);
   });
@@ -48,8 +49,9 @@ describe("ResolveVisibilityExperimentsUseCase", () => {
       id: "r0",
       projectId: "p1",
       samplesPerQuery: 1,
+      groundingMode: "parametric",
       runAt: new Date("2026-06-01"),
-      outcomes: [{ query: "q1", slots: ["MENTIONED"], competitorsMentioned: [] }],
+      outcomes: [{ query: "q1", slots: ["MENTIONED"], competitorsMentioned: [], citedSamples: 0, citations: [] }],
     });
     await useCase.execute("p1", pastRun);
 

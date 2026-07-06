@@ -27,10 +27,11 @@ describe("PrismaAiVisibilityRunRepository", () => {
       id: crypto.randomUUID(),
       projectId,
       samplesPerQuery: 3,
+      groundingMode: "parametric",
       runAt: new Date("2026-07-01"),
       outcomes: [
-        { query: "q1", slots: ["OPEN", "CONTESTED", "OPEN"], competitorsMentioned: ["Polymarket"] },
-        { query: "q2", slots: ["MENTIONED"], competitorsMentioned: [] },
+        { query: "q1", slots: ["OPEN", "CONTESTED", "OPEN"], competitorsMentioned: ["Polymarket"], citedSamples: 0, citations: [] },
+        { query: "q2", slots: ["MENTIONED"], competitorsMentioned: [], citedSamples: 0, citations: [] },
       ],
     });
 
@@ -51,8 +52,9 @@ describe("PrismaAiVisibilityRunRepository", () => {
         id: crypto.randomUUID(),
         projectId,
         samplesPerQuery: 1,
+        groundingMode: "parametric",
         runAt: new Date("2026-06-01"),
-        outcomes: [{ query: "old", slots: ["OPEN"], competitorsMentioned: [] }],
+        outcomes: [{ query: "old", slots: ["OPEN"], competitorsMentioned: [], citedSamples: 0, citations: [] }],
       })
     );
     await repository.save(
@@ -60,8 +62,9 @@ describe("PrismaAiVisibilityRunRepository", () => {
         id: crypto.randomUUID(),
         projectId,
         samplesPerQuery: 1,
+        groundingMode: "parametric",
         runAt: new Date("2026-07-15"),
-        outcomes: [{ query: "new", slots: ["MENTIONED"], competitorsMentioned: [] }],
+        outcomes: [{ query: "new", slots: ["MENTIONED"], competitorsMentioned: [], citedSamples: 0, citations: [] }],
       })
     );
 

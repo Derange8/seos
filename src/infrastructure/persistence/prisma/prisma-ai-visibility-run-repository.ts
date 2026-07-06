@@ -2,11 +2,29 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import type { AiVisibilityRunRepositoryPort } from "@/application/ai-visibility/ports/ai-visibility-run-repository-port";
 import { AiVisibilityProbeRun, type QueryOutcome } from "@/domain/ai-visibility/entities/probe-run";
 import type { Slot } from "@/domain/ai-visibility/slot";
+import type { Citation, GroundingMode } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 
 const VALID_SLOTS: readonly Slot[] = ["MENTIONED", "CONTESTED", "OPEN"];
 
+function toGroundingMode(raw: unknown): GroundingMode {
+  return raw === "web_grounded" ? "web_grounded" : "parametric";
+}
+
+// Coerce the citations sub-array of a JSON outcome, keeping only well-formed
+// {url, title?} entries (the column isn't DB-type-checked).
+function toCitations(raw: unknown): Citation[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry): Citation[] => {
+    const c = entry as Record<string, unknown>;
+    if (typeof c?.url !== "string" || c.url.length === 0) return [];
+    return [typeof c.title === "string" ? { url: c.url, title: c.title } : { url: c.url }];
+  });
+}
+
 // outcomes is a plain JSON column, not type-checked by the DB — same
-// defensive coercion as KeywordCannibalization's pages.
+// defensive coercion as KeywordCannibalization's pages. Older rows have no
+// citedSamples/citations (they predate web-grounded probing) → default to
+// 0/[], the honest reading for a parametric run.
 function toDomainOutcomes(raw: unknown): QueryOutcome[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((entry): QueryOutcome[] => {
@@ -18,7 +36,8 @@ function toDomainOutcomes(raw: unknown): QueryOutcome[] {
     const competitorsMentioned = Array.isArray(candidate.competitorsMentioned)
       ? candidate.competitorsMentioned.filter((c): c is string => typeof c === "string")
       : [];
-    return [{ query: candidate.query, slots, competitorsMentioned }];
+    const citedSamples = typeof candidate.citedSamples === "number" ? candidate.citedSamples : 0;
+    return [{ query: candidate.query, slots, competitorsMentioned, citedSamples, citations: toCitations(candidate.citations) }];
   });
 }
 
@@ -31,10 +50,13 @@ export class PrismaAiVisibilityRunRepository implements AiVisibilityRunRepositor
         id: run.id,
         projectId: run.projectId,
         samplesPerQuery: run.samplesPerQuery,
+        groundingMode: run.groundingMode,
         outcomes: run.outcomes.map((o) => ({
           query: o.query,
           slots: [...o.slots],
           competitorsMentioned: [...o.competitorsMentioned],
+          citedSamples: o.citedSamples,
+          citations: o.citations.map((c) => (c.title !== undefined ? { url: c.url, title: c.title } : { url: c.url })),
         })),
         runAt: run.runAt,
       },
@@ -52,6 +74,7 @@ export class PrismaAiVisibilityRunRepository implements AiVisibilityRunRepositor
       id: row.id,
       projectId: row.projectId,
       samplesPerQuery: row.samplesPerQuery,
+      groundingMode: toGroundingMode(row.groundingMode),
       runAt: row.runAt,
       outcomes: toDomainOutcomes(row.outcomes),
     });
@@ -69,6 +92,7 @@ export class PrismaAiVisibilityRunRepository implements AiVisibilityRunRepositor
         id: row.id,
         projectId: row.projectId,
         samplesPerQuery: row.samplesPerQuery,
+        groundingMode: toGroundingMode(row.groundingMode),
         runAt: row.runAt,
         outcomes: toDomainOutcomes(row.outcomes),
       })

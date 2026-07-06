@@ -575,8 +575,14 @@ model AiVisibilityProbeRun {
   projectId       String
   project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   samplesPerQuery Int
-  // Array of { query, slots: string[], competitorsMentioned: string[] } —
-  // see QueryOutcome. Plain JSON, not type-checked by the DB.
+  // How this run was measured: "parametric" (model memory only) or
+  // "web_grounded" (live web search, the only mode that yields citations).
+  // Defaults to parametric so rows written before this column existed read
+  // correctly as the memory-only measurement they were.
+  groundingMode   String   @default("parametric")
+  // Array of { query, slots: string[], competitorsMentioned: string[],
+  // citedSamples: number, citations: {url,title?}[] } — see QueryOutcome.
+  // Plain JSON, not type-checked by the DB.
   outcomes        Json
   runAt           DateTime @default(now())
 

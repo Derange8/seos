@@ -10,6 +10,7 @@ import { ResolveVisibilityExperimentsUseCase } from "@/application/ai-visibility
 import { AiVisibilityProviderNotConfiguredError } from "@/application/ai-visibility/errors";
 import { toAiVisibilityRunDto } from "@/application/ai-visibility/dto";
 import type { ProbeTarget } from "@/domain/ai-visibility/entities/probe-target";
+import type { GroundingMode } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { requireProjectAccess } from "@/infrastructure/auth/require-project-access";
 import { ConsoleLogger } from "@/infrastructure/logging/console-logger";
 
@@ -65,6 +66,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   const competitors = sanitizeStringList(payload.competitors);
   const samplesPerQuery = clamp(Number(payload.samplesPerQuery) || DEFAULT_SAMPLES, 1, MAX_SAMPLES);
+  // Default to the real AI-search surface; only fall back to the cheap
+  // memory-only reading when explicitly asked. An unrecognized value is
+  // treated as web_grounded rather than silently downgraded.
+  const groundingMode: GroundingMode =
+    payload.groundingMode === "parametric" ? "parametric" : "web_grounded";
 
   const domain = project.domain.value;
   const firstLabel = domain.split(".")[0] ?? domain;
@@ -85,7 +91,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   });
 
   try {
-    const run = await useCase.execute(projectId, target);
+    const run = await useCase.execute(projectId, target, groundingMode);
     // A fresh probe is the re-measure that resolves any open experiments for
     // the queries it covered. Never let ledger bookkeeping fail the probe.
     try {

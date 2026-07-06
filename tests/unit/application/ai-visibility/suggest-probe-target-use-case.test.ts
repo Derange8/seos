@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { SuggestProbeTargetUseCase } from "@/application/ai-visibility/use-cases/suggest-probe-target-use-case";
 import type {
   AiVisibilityModelPort,
+  AskResult,
+  GroundingMode,
   ProbeTargetSuggestionInput,
 } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import type { ProjectRepositoryPort } from "@/application/projects/ports/project-repository-port";
@@ -29,8 +31,8 @@ const crawlJobStub = { id: "job-1" } as unknown as CrawlJob;
 
 class CapturingModel implements AiVisibilityModelPort {
   lastInput: ProbeTargetSuggestionInput | null = null;
-  async ask(): Promise<string> {
-    return "";
+  async ask(_query: string, mode: GroundingMode): Promise<AskResult> {
+    return { answer: "", citations: [], groundingMode: mode };
   }
   async namesSpecificOption(): Promise<boolean> {
     return false;

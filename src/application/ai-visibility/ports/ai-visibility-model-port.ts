@@ -44,14 +44,46 @@ export interface CitationDraft {
   faqs: { question: string; answer: string }[];
 }
 
+// How the probe reached its answer:
+//  - "parametric":   the model answered from its training memory alone (no
+//                    web search). Fast and cheap, but measures what the model
+//                    "remembers", not what a real AI-search user sees today.
+//  - "web_grounded": the model ran a live web search and answered from
+//                    retrieved sources. This is the real AI-search surface —
+//                    and the only mode that can produce citations.
+export type GroundingMode = "parametric" | "web_grounded";
+
+// One source the model cited in a web-grounded answer. Whether this source
+// belongs to the target's own domain (or a competitor) is decided in the
+// domain layer against the ProbeTarget — the adapter only reports the raw URL
+// it was given, so URL-normalization/domain-matching lives in one place.
+export interface Citation {
+  url: string;
+  title?: string;
+}
+
+// The outcome of one `ask`: the answer text (as before) plus, in
+// web_grounded mode, the sources the model cited. In parametric mode
+// `citations` is always empty (no web search happened) and that is an honest
+// reading, not a failure.
+export interface AskResult {
+  answer: string;
+  citations: Citation[];
+  groundingMode: GroundingMode;
+}
+
 // The AI answer engine as a queryable oracle. Implemented in infrastructure
 // by reusing the existing multi-provider LLM setup (see LlmSettings /
 // DynamicRecommendationProvider) — the probe just needs raw ask + a yes/no
 // judgement, not the recommendation-specific shape of LLMPort.
 export interface AiVisibilityModelPort {
-  // Ask the model a buyer-intent query as a plain user would, return its
-  // answer text.
-  ask(query: string): Promise<string>;
+  // Ask the model a buyer-intent query as a plain user would. `mode` is
+  // explicit on every call (never a silent fallback): a parametric answer and
+  // a web-grounded answer measure genuinely different things, so which one was
+  // taken is part of the result. An adapter that cannot honor `web_grounded`
+  // (e.g. a provider with no web-search tool) must reject, not quietly degrade
+  // to parametric — that would be a measurement lie.
+  ask(query: string, mode: GroundingMode): Promise<AskResult>;
   // Does this answer name at least one specific, real platform/product (a
   // brand), as opposed to a generic non-committal answer? Splits OPEN from
   // CONTESTED for platforms not in the target's known-competitor list.

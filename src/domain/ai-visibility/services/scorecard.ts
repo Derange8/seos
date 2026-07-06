@@ -20,6 +20,14 @@ export interface AiVisibilityScorecard {
   mentionedPct: number;
   contestedPct: number;
   openPct: number;
+  // Citation is a second, independent axis from the mention slot: in how many
+  // samples the answer cited the target's own domain. A query can be OPEN
+  // (not named in the prose) yet CITED (its site is in the sources) — the
+  // "read but not recommended" case, the sharpest fixable gap. Always 0 for a
+  // parametric run (no web search), so read it alongside the run's grounding
+  // mode, not on its own.
+  citedSamples: number;
+  citedPct: number;
   competitorFrequency: CompetitorCount[];
   winnableQueries: string[];
 }
@@ -43,6 +51,10 @@ export function buildScorecard(outcomes: readonly QueryOutcome[]): AiVisibilityS
 
   const winnableQueries = outcomes.filter((o) => dominantSlot(o.slots) === "OPEN").map((o) => o.query);
 
+  // Sample-level citation count, same denominator as the slot percentages so
+  // "cited %" reads on the same footing as "mentioned %".
+  const citedSamples = outcomes.reduce((sum, o) => sum + o.citedSamples, 0);
+
   return {
     totalSamples: total,
     mentioned,
@@ -51,6 +63,8 @@ export function buildScorecard(outcomes: readonly QueryOutcome[]): AiVisibilityS
     mentionedPct: pct(mentioned, total),
     contestedPct: pct(contested, total),
     openPct: pct(open, total),
+    citedSamples,
+    citedPct: pct(citedSamples, total),
     competitorFrequency,
     winnableQueries,
   };

@@ -15,9 +15,11 @@ describe("OpenAiAiVisibilityModel", () => {
     vi.stubGlobal("fetch", fetchMock);
     const model = new OpenAiAiVisibilityModel({ apiKey: "test-key" });
 
-    const answer = await model.ask("best prediction market?");
+    const result = await model.ask("best prediction market?", "parametric");
 
-    expect(answer).toBe("Polymarket is popular.");
+    expect(result.answer).toBe("Polymarket is popular.");
+    expect(result.groundingMode).toBe("parametric");
+    expect(result.citations).toEqual([]);
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.openai.com/v1/chat/completions");
     expect(init.headers).toMatchObject({ authorization: "Bearer test-key" });
@@ -25,6 +27,45 @@ describe("OpenAiAiVisibilityModel", () => {
     expect(body.model).toBe("gpt-4o-mini");
     expect(body.messages).toEqual([{ role: "user", content: "best prediction market?" }]);
     expect(body.temperature).toBeGreaterThan(0);
+  });
+
+  it("web_grounded ask enables web search and extracts url_citation sources", async () => {
+    const groundedResponse = new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: "Janus is a good option.",
+              annotations: [
+                { type: "url_citation", url_citation: { url: "https://janus.vote/x", title: "Janus" } },
+                { type: "url_citation", url_citation: { url: "https://polymarket.com" } },
+                { type: "other", url_citation: { url: "https://ignored.com" } },
+              ],
+            },
+          },
+        ],
+      }),
+      { status: 200 }
+    );
+    const fetchMock = vi.fn().mockResolvedValue(groundedResponse);
+    vi.stubGlobal("fetch", fetchMock);
+    const model = new OpenAiAiVisibilityModel({ apiKey: "k", supportsWebSearch: true });
+
+    const result = await model.ask("best prediction market?", "web_grounded");
+
+    expect(result.groundingMode).toBe("web_grounded");
+    expect(result.citations).toEqual([
+      { url: "https://janus.vote/x", title: "Janus" },
+      { url: "https://polymarket.com" },
+    ]);
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.web_search_options).toBeDefined();
+    expect(body.model).toBe("gpt-4o-search-preview");
+  });
+
+  it("rejects a web_grounded ask when the provider does not support web search", async () => {
+    const model = new OpenAiAiVisibilityModel({ apiKey: "k", supportsWebSearch: false });
+    await expect(model.ask("q", "web_grounded")).rejects.toThrow(/does not support web-grounded/);
   });
 
   it("namesSpecificOption is true on a 'yes' verdict and false otherwise, judged at temperature 0", async () => {
@@ -48,7 +89,7 @@ describe("OpenAiAiVisibilityModel", () => {
       baseUrl: "https://api.deepseek.com/v1/chat/completions",
     });
 
-    await model.ask("q");
+    await model.ask("q", "parametric");
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.deepseek.com/v1/chat/completions");
@@ -116,12 +157,12 @@ describe("OpenAiAiVisibilityModel", () => {
 
   it("throws on a non-ok response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("bad", { status: 401 })));
-    await expect(new OpenAiAiVisibilityModel({ apiKey: "k" }).ask("q")).rejects.toThrow(/401/);
+    await expect(new OpenAiAiVisibilityModel({ apiKey: "k" }).ask("q", "parametric")).rejects.toThrow(/401/);
   });
 
   it("throws when the response has no message content", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [] }), { status: 200 })));
-    await expect(new OpenAiAiVisibilityModel({ apiKey: "k" }).ask("q")).rejects.toThrow(/message content/);
+    await expect(new OpenAiAiVisibilityModel({ apiKey: "k" }).ask("q", "parametric")).rejects.toThrow(/message content/);
   });
 
   it("aborts and throws a timeout error when the request hangs past timeoutMs", async () => {
@@ -135,7 +176,7 @@ describe("OpenAiAiVisibilityModel", () => {
     vi.stubGlobal("fetch", hangingFetch);
     const model = new OpenAiAiVisibilityModel({ apiKey: "k", timeoutMs: 10 });
 
-    await expect(model.ask("q")).rejects.toThrow(/timed out after 10ms/);
+    await expect(model.ask("q", "parametric")).rejects.toThrow(/timed out after 10ms/);
     expect((hangingFetch.mock.calls[0] as [string, RequestInit])[1].signal).toBeInstanceOf(AbortSignal);
   });
 });

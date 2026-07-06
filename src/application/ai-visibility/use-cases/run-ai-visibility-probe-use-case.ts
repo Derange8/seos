@@ -2,7 +2,12 @@ import { AiVisibilityProbeRun } from "@/domain/ai-visibility/entities/probe-run"
 import type { ProbeTarget } from "@/domain/ai-visibility/entities/probe-target";
 import type { Slot } from "@/domain/ai-visibility/slot";
 import { detectCompetitors, detectMention } from "@/domain/ai-visibility/slot";
-import type { AiVisibilityModelPort } from "@/application/ai-visibility/ports/ai-visibility-model-port";
+import { citesDomain } from "@/domain/ai-visibility/citation";
+import type {
+  AiVisibilityModelPort,
+  Citation,
+  GroundingMode,
+} from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import type { AiVisibilityRunRepositoryPort } from "@/application/ai-visibility/ports/ai-visibility-run-repository-port";
 import type { Logger } from "@/shared/logger";
 
@@ -25,11 +30,14 @@ const DEFAULT_SAMPLES = 4;
 const DEFAULT_RETRIES_PER_SAMPLE = 1;
 const DEFAULT_RETRY_DELAY_MS = 500;
 
-// One successful reading of a query: its slot plus the competitors that answer
-// named.
+// One successful reading of a query: its slot, the competitors the answer
+// named, whether the answer cited the target's own domain, and the raw
+// sources it cited (for the union rolled up onto the query outcome).
 interface SampleResult {
   slot: Slot;
   competitors: string[];
+  citedDomain: boolean;
+  citations: Citation[];
 }
 
 type SampleAttempt = { ok: true; result: SampleResult } | { ok: false; error: unknown };
@@ -54,21 +62,33 @@ export class RunAiVisibilityProbeUseCase {
     this.retryDelayMs = deps.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
   }
 
-  async execute(projectId: string, target: ProbeTarget): Promise<AiVisibilityProbeRun> {
-    const run = AiVisibilityProbeRun.create(projectId, this.samplesPerQuery);
+  async execute(
+    projectId: string,
+    target: ProbeTarget,
+    mode: GroundingMode
+  ): Promise<AiVisibilityProbeRun> {
+    const run = AiVisibilityProbeRun.create(projectId, this.samplesPerQuery, mode);
     let lastError: unknown = null;
 
     for (const query of target.queries) {
       const slots: Slot[] = [];
       const competitors = new Set<string>();
+      let citedSamples = 0;
+      // De-dupe sources by URL across this query's samples for the union we
+      // surface as "evidence".
+      const citationsByUrl = new Map<string, Citation>();
 
       for (let i = 0; i < this.samplesPerQuery; i++) {
-        const attempt = await this.sample(query, target);
+        const attempt = await this.sample(query, target, mode);
         if (!attempt.ok) {
           lastError = attempt.error;
           continue;
         }
         for (const c of attempt.result.competitors) competitors.add(c);
+        if (attempt.result.citedDomain) citedSamples++;
+        for (const c of attempt.result.citations) {
+          if (!citationsByUrl.has(c.url)) citationsByUrl.set(c.url, c);
+        }
         slots.push(attempt.result.slot);
       }
 
@@ -80,7 +100,13 @@ export class RunAiVisibilityProbeUseCase {
         continue;
       }
 
-      run.addOutcome({ query, slots, competitorsMentioned: [...competitors] });
+      run.addOutcome({
+        query,
+        slots,
+        competitorsMentioned: [...competitors],
+        citedSamples,
+        citations: [...citationsByUrl.values()],
+      });
     }
 
     if (run.outcomes.length === 0) {
@@ -97,13 +123,25 @@ export class RunAiVisibilityProbeUseCase {
 
   // One sample = one `ask` + its classification, with bounded retries. Returns
   // the last error rather than throwing so the caller can drop just this sample.
-  private async sample(query: string, target: ProbeTarget): Promise<SampleAttempt> {
+  private async sample(
+    query: string,
+    target: ProbeTarget,
+    mode: GroundingMode
+  ): Promise<SampleAttempt> {
     let lastError: unknown = null;
     for (let attempt = 0; attempt <= this.retriesPerSample; attempt++) {
       try {
-        const answer = await this.deps.model.ask(query);
+        const { answer, citations } = await this.deps.model.ask(query, mode);
         const slot = await this.classify(answer, target);
-        return { ok: true, result: { slot, competitors: detectCompetitors(answer, target.competitors) } };
+        return {
+          ok: true,
+          result: {
+            slot,
+            competitors: detectCompetitors(answer, target.competitors),
+            citedDomain: citesDomain(citations, target.domain),
+            citations,
+          },
+        };
       } catch (error) {
         lastError = error;
         this.deps.logger?.warn("AI visibility: sample attempt failed", {

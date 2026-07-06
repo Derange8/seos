@@ -1,4 +1,5 @@
 import type { Slot } from "@/domain/ai-visibility/slot";
+import type { Citation, GroundingMode } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 
 // One query's result within a probe run: the slot of each of the N samples
 // (kept, not collapsed — the distribution is the honest signal) plus the
@@ -7,12 +8,22 @@ export interface QueryOutcome {
   query: string;
   slots: readonly Slot[];
   competitorsMentioned: readonly string[];
+  // Web-grounded signal, parallel to `slots`: in how many of this query's
+  // samples the answer cited the target's own domain. Always 0 for a
+  // parametric run (no web search, no sources) — an honest reading, not a gap.
+  citedSamples: number;
+  // The distinct sources seen across this query's samples (union). Populated
+  // only in web_grounded mode; the "evidence" the dashboard drills into.
+  citations: readonly Citation[];
 }
 
 export interface AiVisibilityProbeRunProps {
   id: string;
   projectId: string;
   samplesPerQuery: number;
+  // How the whole run was measured. Recorded so a trend never silently
+  // compares a parametric run against a web-grounded one (different surfaces).
+  groundingMode: GroundingMode;
   runAt: Date;
   outcomes: QueryOutcome[];
 }
@@ -23,11 +34,16 @@ export interface AiVisibilityProbeRunProps {
 export class AiVisibilityProbeRun {
   private constructor(private readonly props: AiVisibilityProbeRunProps) {}
 
-  static create(projectId: string, samplesPerQuery: number): AiVisibilityProbeRun {
+  static create(
+    projectId: string,
+    samplesPerQuery: number,
+    groundingMode: GroundingMode
+  ): AiVisibilityProbeRun {
     return new AiVisibilityProbeRun({
       id: crypto.randomUUID(),
       projectId,
       samplesPerQuery,
+      groundingMode,
       runAt: new Date(),
       outcomes: [],
     });
@@ -51,6 +67,10 @@ export class AiVisibilityProbeRun {
 
   get samplesPerQuery(): number {
     return this.props.samplesPerQuery;
+  }
+
+  get groundingMode(): GroundingMode {
+    return this.props.groundingMode;
   }
 
   get runAt(): Date {

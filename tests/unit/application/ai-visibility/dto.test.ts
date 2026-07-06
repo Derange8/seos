@@ -8,10 +8,11 @@ describe("toAiVisibilityRunDto", () => {
       id: "run-1",
       projectId: "project-1",
       samplesPerQuery: 2,
+      groundingMode: "web_grounded",
       runAt: new Date("2026-07-03T00:00:00.000Z"),
       outcomes: [
-        { query: "q-open", slots: ["OPEN", "OPEN"], competitorsMentioned: [] },
-        { query: "q-contested", slots: ["CONTESTED", "OPEN"], competitorsMentioned: ["Polymarket"] },
+        { query: "q-open", slots: ["OPEN", "OPEN"], competitorsMentioned: [], citedSamples: 1, citations: [{ url: "https://acme.com/a" }] },
+        { query: "q-contested", slots: ["CONTESTED", "OPEN"], competitorsMentioned: ["Polymarket"], citedSamples: 0, citations: [] },
       ],
     });
 
@@ -19,13 +20,17 @@ describe("toAiVisibilityRunDto", () => {
 
     expect(dto.runAt).toBe("2026-07-03T00:00:00.000Z");
     expect(dto.samplesPerQuery).toBe(2);
+    expect(dto.groundingMode).toBe("web_grounded");
     expect(dto.scorecard.totalSamples).toBe(4);
     expect(dto.scorecard.openPct).toBe(75);
+    expect(dto.scorecard.citedSamples).toBe(1);
     expect(dto.scorecard.winnableQueries).toEqual(["q-open"]);
 
     const open = dto.queries.find((q) => q.query === "q-open");
     expect(open?.dominantSlot).toBe("OPEN");
     expect(open?.open).toBe(2);
+    expect(open?.citedSamples).toBe(1);
+    expect(open?.citations).toEqual([{ url: "https://acme.com/a" }]);
 
     const contested = dto.queries.find((q) => q.query === "q-contested");
     // OPEN/CONTESTED tie resolves to CONTESTED (see dominantSlot).
@@ -40,8 +45,9 @@ describe("toAiVisibilityTrendDto", () => {
       id,
       projectId: "project-1",
       samplesPerQuery: slots.length,
+      groundingMode: "parametric",
       runAt: new Date(runAt),
-      outcomes: [{ query: "q", slots, competitorsMentioned: [] }],
+      outcomes: [{ query: "q", slots, competitorsMentioned: [], citedSamples: 0, citations: [] }],
     });
   }
 

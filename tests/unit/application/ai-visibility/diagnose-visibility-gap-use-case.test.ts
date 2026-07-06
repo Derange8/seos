@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { DiagnoseVisibilityGapUseCase } from "@/application/ai-visibility/use-cases/diagnose-visibility-gap-use-case";
 import type {
   AiVisibilityModelPort,
+  AskResult,
+  GroundingMode,
   VisibilityGapInput,
 } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import type { AiVisibilityRunRepositoryPort } from "@/application/ai-visibility/ports/ai-visibility-run-repository-port";
@@ -18,8 +20,8 @@ function domain(value: string): DomainName {
 
 class CapturingModel implements AiVisibilityModelPort {
   lastInput: VisibilityGapInput | null = null;
-  async ask(): Promise<string> {
-    return "";
+  async ask(_query: string, mode: GroundingMode): Promise<AskResult> {
+    return { answer: "", citations: [], groundingMode: mode };
   }
   async namesSpecificOption(): Promise<boolean> {
     return false;
@@ -61,8 +63,9 @@ describe("DiagnoseVisibilityGapUseCase", () => {
       id: "r1",
       projectId: project.id,
       samplesPerQuery: 2,
+      groundingMode: "parametric",
       runAt: new Date(),
-      outcomes: [{ query: "best prediction market", slots: ["CONTESTED"], competitorsMentioned: ["Polymarket", "Augur"] }],
+      outcomes: [{ query: "best prediction market", slots: ["CONTESTED"], competitorsMentioned: ["Polymarket", "Augur"], citedSamples: 0, citations: [] }],
     });
     const model = new CapturingModel();
 

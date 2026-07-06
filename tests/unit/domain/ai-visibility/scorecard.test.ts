@@ -4,10 +4,10 @@ import type { QueryOutcome } from "@/domain/ai-visibility/entities/probe-run";
 
 describe("buildScorecard", () => {
   const outcomes: QueryOutcome[] = [
-    { query: "q1", slots: ["CONTESTED", "CONTESTED"], competitorsMentioned: ["Polymarket", "Augur"] },
-    { query: "q2", slots: ["MENTIONED", "MENTIONED"], competitorsMentioned: [] },
-    { query: "q3", slots: ["OPEN", "OPEN"], competitorsMentioned: [] },
-    { query: "q4", slots: ["OPEN", "CONTESTED"], competitorsMentioned: ["Polymarket"] },
+    { query: "q1", slots: ["CONTESTED", "CONTESTED"], competitorsMentioned: ["Polymarket", "Augur"], citedSamples: 0, citations: [] },
+    { query: "q2", slots: ["MENTIONED", "MENTIONED"], competitorsMentioned: [], citedSamples: 2, citations: [{ url: "https://acme.com" }] },
+    { query: "q3", slots: ["OPEN", "OPEN"], competitorsMentioned: [], citedSamples: 1, citations: [{ url: "https://acme.com/x" }] },
+    { query: "q4", slots: ["OPEN", "CONTESTED"], competitorsMentioned: ["Polymarket"], citedSamples: 0, citations: [] },
   ];
 
   it("counts slots at the sample level and computes percentages", () => {
@@ -19,6 +19,13 @@ describe("buildScorecard", () => {
     expect(sc.mentionedPct).toBe(25);
     expect(sc.contestedPct).toBe(38); // 3/8 = 37.5 -> 38
     expect(sc.openPct).toBe(38);
+  });
+
+  it("sums cited samples across queries and computes a citation percentage", () => {
+    const sc = buildScorecard(outcomes);
+    // q2 cited 2 + q3 cited 1 = 3 of 8 samples.
+    expect(sc.citedSamples).toBe(3);
+    expect(sc.citedPct).toBe(38); // 3/8 = 37.5 -> 38
   });
 
   it("ranks competitors by how many queries they appeared in", () => {
