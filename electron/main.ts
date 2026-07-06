@@ -154,6 +154,70 @@ function createWindow(): void {
     shell.openExternal(url);
     return { action: "deny" };
   });
+
+  // Belt-and-suspenders for clipboard shortcuts. `installEditMenu` sets up
+  // the standard Edit-role menu items, which is the documented way to wire
+  // Cmd+C/V/X — but confirmed live that it alone did NOT make paste work in
+  // this packaged app (Cmd+V and Ctrl+V both did nothing in any input). The
+  // menu-accelerator path evidently isn't dispatching to the focused
+  // webContents here. So we also intercept the raw key events before the
+  // page sees them and drive the clipboard edit commands directly on
+  // webContents — this doesn't depend on menu focus/accelerator routing at
+  // all. Handles both Cmd (mac) and Ctrl (in case the user hits Ctrl+V out
+  // of Windows habit). Returning without preventing default is fine; the
+  // edit command is what actually performs the action.
+  mainWindow.webContents.on("before-input-event", (_event, input) => {
+    if (input.type !== "keyDown") return;
+    const mod = input.meta || input.control;
+    if (!mod) return;
+    const key = input.key.toLowerCase();
+    const wc = mainWindow?.webContents;
+    if (!wc) return;
+    switch (key) {
+      case "c":
+        wc.copy();
+        break;
+      case "v":
+        wc.paste();
+        break;
+      case "x":
+        wc.cut();
+        break;
+      case "a":
+        wc.selectAll();
+        break;
+      case "z":
+        if (input.shift) wc.redo();
+        else wc.undo();
+        break;
+    }
+  });
+
+  // Right-click "Paste" (and Cut/Copy/Select All). Electron does NOT provide
+  // a default context menu, so right-clicking an input showed nothing —
+  // confirmed live after the keyboard shortcuts above were working. Build a
+  // minimal editing context menu on demand from the right-click params: show
+  // Cut/Copy only when there's a selection, Paste only when the target is
+  // editable, and Select All when editable. Same direct-webContents commands
+  // as the keyboard path, so it doesn't depend on the app menu either.
+  mainWindow.webContents.on("context-menu", (_event, params) => {
+    const wc = mainWindow?.webContents;
+    if (!wc) return;
+    const hasSelection = params.selectionText.trim().length > 0;
+    const canEdit = params.isEditable;
+    const items: Electron.MenuItemConstructorOptions[] = [];
+    if (canEdit) items.push({ label: "Undo", enabled: params.editFlags.canUndo, click: () => wc.undo() });
+    if (canEdit) items.push({ label: "Redo", enabled: params.editFlags.canRedo, click: () => wc.redo() });
+    if (canEdit) items.push({ type: "separator" });
+    if (canEdit) items.push({ label: "Cut", enabled: params.editFlags.canCut, click: () => wc.cut() });
+    items.push({ label: "Copy", enabled: hasSelection && params.editFlags.canCopy, click: () => wc.copy() });
+    if (canEdit) items.push({ label: "Paste", enabled: params.editFlags.canPaste, click: () => wc.paste() });
+    if (canEdit) items.push({ type: "separator" });
+    if (canEdit) items.push({ label: "Select All", click: () => wc.selectAll() });
+    if (items.length === 0) return;
+    Menu.buildFromTemplate(items).popup({ window: mainWindow ?? undefined });
+  });
+
   mainWindow.loadURL(APP_URL);
 }
 
