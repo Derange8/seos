@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, shell, safeStorage } from "electron";
+import { app, BrowserWindow, Menu, dialog, shell, safeStorage } from "electron";
 import { autoUpdater } from "electron-updater";
 import log from "electron-log";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -104,6 +104,33 @@ async function startNextServer(): Promise<void> {
   await waitForServerReady(APP_URL, 20000);
 }
 
+// Electron only wires up standard Cmd+C/Cmd+V/Cmd+X/Cmd+A behavior for
+// text fields when an app menu with an "Edit" role is actually installed.
+// This app never set one, so — confirmed live — pasting into any input
+// (e.g. the LLM API key field on the settings page) silently did nothing
+// on macOS: Cmd+V had no menu item behind it to dispatch the paste
+// command to the focused webContents. A bare "Edit" role is the standard
+// fix; the rest of a typical default menu (File/View/Window) isn't needed
+// for a single-window utility app, but Edit's copy/paste/undo bindings
+// are load-bearing for basic form usability.
+function installEditMenu(): void {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -170,6 +197,7 @@ function checkForUpdatesManually(): void {
 
 app.whenReady().then(async () => {
   try {
+    installEditMenu();
     await startNextServer();
     createWindow();
     checkForUpdatesManually();

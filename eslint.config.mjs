@@ -34,6 +34,10 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // esbuild-bundled Electron main process output — generated, not source.
     "dist-electron/**",
+    // electron-builder's packaged app output (includes a full copy of
+    // .next/standalone, itself full of generated bundles) — generated,
+    // not source.
+    "dist-installer/**",
   ]),
 ]);
 
