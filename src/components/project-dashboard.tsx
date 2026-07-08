@@ -208,6 +208,50 @@ function StatTile({
   );
 }
 
+// One AI-visibility metric as a proper stat cell — big number, quiet label,
+// and (optionally) the signed delta vs the previous run beneath it. Replaces
+// the old emoji+text run ("✅ Mentioned 0%") which read like a footnote rather
+// than the product's core reading. `tone` colors the number; `delta` null hides
+// the movement line (e.g. cited isn't comparable, or no previous run).
+function VisibilityMetric({
+  label,
+  pct,
+  tone,
+  delta,
+}: {
+  label: string;
+  pct: number;
+  tone: "good" | "open" | "muted" | "cited";
+  delta?: number | null;
+}) {
+  const toneClass =
+    tone === "good"
+      ? "text-green-400"
+      : tone === "open"
+        ? "text-cyan-300"
+        : tone === "cited"
+          ? "text-amber-300"
+          : "text-foreground";
+  const deltaClass =
+    delta == null || delta === 0
+      ? "text-muted-foreground/60"
+      : delta > 0
+        ? "text-green-400"
+        : "text-red-400";
+  return (
+    <div className="glass-card flex flex-col gap-0.5 rounded-xl p-3">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className={`text-xl font-semibold tracking-tight ${toneClass}`}>{pct}%</span>
+      {delta != null && (
+        <span className={`text-[0.7rem] ${deltaClass}`}>
+          {delta > 0 ? "↑" : delta < 0 ? "↓" : "→"} {delta > 0 ? "+" : ""}
+          {delta}% vs last
+        </span>
+      )}
+    </div>
+  );
+}
+
 // Extracted from the audit issue list so the same row markup can render
 // both a rule's directly-listed issues and the issues inside an expanded
 // route-template sub-group (e.g. /post/[id]) without duplicating this
@@ -729,10 +773,6 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
     return parts.join("\n");
   }
 
-  function fmtDelta(n: number): string {
-    return n > 0 ? `+${n}` : `${n}`;
-  }
-
   function engineLabel(engine: string): string {
     const labels: Record<string, string> = {
       openai: "ChatGPT",
@@ -741,10 +781,6 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       gemini: "Gemini",
     };
     return labels[engine] ?? engine;
-  }
-
-  function deltaClass(n: number): string {
-    return n > 0 ? "text-green-400" : n < 0 ? "text-red-400" : "text-muted-foreground";
   }
 
   function refreshAiVisibilityExperiments() {
@@ -2039,21 +2075,34 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
               </p>
               {fixPlanError && <p className="text-xs text-amber-300">{fixPlanError}</p>}
               {engineComparison && (
-                <div className="flex flex-col gap-2 rounded-md border border-white/10 bg-black/20 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">Engine comparison (same queries, each engine)</p>
-                  <div className="flex flex-col gap-1">
-                    {engineComparison.engines.map((e) => (
-                      <div key={e.engine} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
-                        <span className="w-20 font-medium">{engineLabel(e.engine)}</span>
-                        <span className="text-green-400">✅ {e.mentionedPct}%</span>
-                        <span className="text-cyan-300">🟢 {e.openPct}%</span>
-                        <span className="text-muted-foreground">⛔ {e.contestedPct}%</span>
-                        <span className="text-amber-300">🔗 {e.citedPct}%</span>
-                      </div>
-                    ))}
+                <div className="glass-card flex flex-col gap-2 rounded-xl p-4">
+                  <p className="text-sm font-medium">Engine comparison</p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[26rem] text-xs">
+                      <thead>
+                        <tr className="text-muted-foreground">
+                          <th className="pb-1 text-left font-medium">Engine</th>
+                          <th className="pb-1 text-right font-medium text-green-400/90">Recommended</th>
+                          <th className="pb-1 text-right font-medium text-cyan-300/90">Winnable</th>
+                          <th className="pb-1 text-right font-medium">Contested</th>
+                          <th className="pb-1 text-right font-medium text-amber-300/90">Cited</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {engineComparison.engines.map((e) => (
+                          <tr key={e.engine} className="border-t border-white/8">
+                            <td className="py-1.5 font-medium">{engineLabel(e.engine)}</td>
+                            <td className="py-1.5 text-right tabular-nums text-green-400">{e.mentionedPct}%</td>
+                            <td className="py-1.5 text-right tabular-nums text-cyan-300">{e.openPct}%</td>
+                            <td className="py-1.5 text-right tabular-nums text-muted-foreground">{e.contestedPct}%</td>
+                            <td className="py-1.5 text-right tabular-nums text-amber-300">{e.citedPct}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                   {engineComparison.failed.length > 0 && (
-                    <p className="text-xs text-red-400">
+                    <p className="text-xs text-destructive">
                       Couldn&apos;t measure: {engineComparison.failed.map((f) => engineLabel(f.engine)).join(", ")}
                     </p>
                   )}
@@ -2103,51 +2152,53 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
               )}
               {aiVisibility && (
                 <div className="flex flex-col gap-3">
-                  <div className="flex flex-wrap gap-x-4 gap-y-1">
-                    <span className="text-green-400">✅ Mentioned {aiVisibility.scorecard.mentionedPct}%</span>
-                    <span className="text-cyan-300">🟢 Open {aiVisibility.scorecard.openPct}%</span>
-                    <span className="text-muted-foreground">⛔ Contested {aiVisibility.scorecard.contestedPct}%</span>
+                  {/* The core reading as a proper stat panel — big numbers with
+                      the movement vs the previous run underneath, not an emoji
+                      footnote. */}
+                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                    <VisibilityMetric
+                      label="Recommended"
+                      pct={aiVisibility.scorecard.mentionedPct}
+                      tone="good"
+                      delta={aiVisibility.delta ? aiVisibility.delta.mentionedPctDelta : null}
+                    />
+                    <VisibilityMetric
+                      label="Winnable (open)"
+                      pct={aiVisibility.scorecard.openPct}
+                      tone="open"
+                      delta={aiVisibility.delta ? aiVisibility.delta.openPctDelta : null}
+                    />
+                    <VisibilityMetric
+                      label="Contested"
+                      pct={aiVisibility.scorecard.contestedPct}
+                      tone="muted"
+                      delta={aiVisibility.delta ? aiVisibility.delta.contestedPctDelta : null}
+                    />
                     {aiVisibility.groundingMode === "web_grounded" && (
-                      <span className="text-amber-300">🔗 Cited {aiVisibility.scorecard.citedPct}%</span>
+                      <VisibilityMetric
+                        label="Cited in sources"
+                        pct={aiVisibility.scorecard.citedPct}
+                        tone="cited"
+                        delta={aiVisibility.delta?.citedComparable ? aiVisibility.delta.citedPctDelta : null}
+                      />
                     )}
-                    <span className="text-muted-foreground">
-                      ({aiVisibility.scorecard.totalSamples} samples ·{" "}
-                      {engineLabel(aiVisibility.engine)} ·{" "}
-                      {aiVisibility.groundingMode === "web_grounded" ? "web search" : "memory"} ·{" "}
-                      {new Date(aiVisibility.runAt).toLocaleString()})
-                    </span>
                   </div>
-                  {aiVisibility.delta && (
-                    <div className="flex flex-col gap-1 rounded-md border border-white/10 bg-black/20 p-2">
-                      <span className="text-xs text-muted-foreground">
-                        Since last run ({new Date(aiVisibility.delta.previousRunAt).toLocaleString()}):
-                      </span>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                        <span className={deltaClass(aiVisibility.delta.mentionedPctDelta)}>
-                          Mentioned {fmtDelta(aiVisibility.delta.mentionedPctDelta)}%
-                        </span>
-                        <span className={deltaClass(aiVisibility.delta.openPctDelta)}>
-                          Open {fmtDelta(aiVisibility.delta.openPctDelta)}%
-                        </span>
-                        <span className="text-muted-foreground">
-                          Contested {fmtDelta(aiVisibility.delta.contestedPctDelta)}%
-                        </span>
-                        {aiVisibility.groundingMode === "web_grounded" && aiVisibility.delta.citedComparable && (
-                          <span className={deltaClass(aiVisibility.delta.citedPctDelta)}>
-                            🔗 Cited {fmtDelta(aiVisibility.delta.citedPctDelta)}%
-                          </span>
-                        )}
-                      </div>
-                      {aiVisibility.delta.changes.length > 0 && (
-                        <ul className="list-disc pl-5 text-xs text-muted-foreground">
-                          {aiVisibility.delta.changes.map((c) => (
-                            <li key={c.query}>
-                              {c.query}: {c.from} → {c.to}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
+                  <p className="text-xs text-muted-foreground/70">
+                    {aiVisibility.scorecard.totalSamples} samples · {engineLabel(aiVisibility.engine)} ·{" "}
+                    {aiVisibility.groundingMode === "web_grounded" ? "live web search" : "model memory"} ·{" "}
+                    {new Date(aiVisibility.runAt).toLocaleString()}
+                    {aiVisibility.delta && (
+                      <> · since {new Date(aiVisibility.delta.previousRunAt).toLocaleDateString()}</>
+                    )}
+                  </p>
+                  {aiVisibility.delta && aiVisibility.delta.changes.length > 0 && (
+                    <ul className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                      {aiVisibility.delta.changes.map((c) => (
+                        <li key={c.query}>
+                          <span className="text-foreground">{c.query}</span>: {c.from} → {c.to}
+                        </li>
+                      ))}
+                    </ul>
                   )}
                   {aiVisibility.scorecard.competitorFrequency.length > 0 && (
                     <p className="text-muted-foreground">
