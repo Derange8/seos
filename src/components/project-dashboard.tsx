@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -178,6 +177,36 @@ const EVENT_TYPE_LABEL: Record<string, string> = {
   CrawlJobCompleted: "Processing the crawl results",
   AuditRunCompleted: "Processing the audit results",
 };
+
+// A single status metric on the overview — big number, quiet label, one-line
+// hint. `accent` highlights the product's north-star (AI visibility). Empty
+// values render "—" so a not-yet-measured tile stays calm, not alarming.
+function StatTile({
+  label,
+  value,
+  suffix,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: string;
+  suffix?: string;
+  hint?: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="glass-card flex flex-col gap-1 rounded-2xl p-4">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="flex items-baseline gap-1">
+        <span className={`text-2xl font-semibold tracking-tight ${accent ? "text-primary" : "text-foreground"}`}>
+          {value}
+        </span>
+        {suffix && <span className="text-sm text-muted-foreground">{suffix}</span>}
+      </span>
+      {hint && <span className="text-xs text-muted-foreground/70">{hint}</span>}
+    </div>
+  );
+}
 
 // Extracted from the audit issue list so the same row markup can render
 // both a rule's directly-listed issues and the issues inside an expanded
@@ -1497,45 +1526,31 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <Link
-            href="/"
-            className="mb-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            ← {t("allSites")}
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
-          <p className="text-sm text-muted-foreground">{project.domain}</p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+          <span className="text-sm text-muted-foreground">{project.domain}</span>
           <Badge variant={project.isVerified ? "default" : "secondary"}>
             {project.isVerified ? t("verified") : t("unverified")}
           </Badge>
-          <div className="flex gap-1">
-            <Button
-              variant={language === "en" ? "default" : "outline"}
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => setLanguage("en")}
-            >
-              EN
-            </Button>
-            <Button
-              variant={language === "tr" ? "default" : "outline"}
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => setLanguage("tr")}
-            >
-              TR
-            </Button>
-          </div>
-          <Link href="/guide" className="text-sm text-muted-foreground hover:text-foreground">
-            {t("guide")}
-          </Link>
-          <Link href="/settings" className="text-sm text-muted-foreground hover:text-foreground">
-            {t("settings")}
-          </Link>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant={language === "en" ? "default" : "outline"}
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => setLanguage("en")}
+          >
+            EN
+          </Button>
+          <Button
+            variant={language === "tr" ? "default" : "outline"}
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => setLanguage("tr")}
+          >
+            TR
+          </Button>
         </div>
       </div>
 
@@ -1607,7 +1622,37 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       </div>
 
       {activeTab === "overview" && (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <div className="flex flex-col gap-5">
+          {/* Status-at-a-glance: the product's real value (SEO health + AI
+              visibility) surfaced on the first screen, not buried in a tab. */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatTile
+              label="SEO Health"
+              value={auditRun?.overallScore != null ? `${auditRun.overallScore}` : "—"}
+              suffix={auditRun?.overallScore != null ? "/100" : undefined}
+              hint={auditRun ? `${auditRun.issues.length} issue${auditRun.issues.length === 1 ? "" : "s"}` : "Run a crawl"}
+            />
+            <StatTile
+              label="AI Visibility"
+              value={aiVisibility ? `${aiVisibility.scorecard.mentionedPct}` : "—"}
+              suffix={aiVisibility ? "%" : undefined}
+              hint={aiVisibility ? "recommended by AI" : "Not measured yet"}
+              accent
+            />
+            <StatTile
+              label="Cited in sources"
+              value={aiVisibility && aiVisibility.groundingMode === "web_grounded" ? `${aiVisibility.scorecard.citedPct}` : "—"}
+              suffix={aiVisibility && aiVisibility.groundingMode === "web_grounded" ? "%" : undefined}
+              hint={aiVisibility ? "in AI-search answers" : "Measure with web search"}
+            />
+            <StatTile
+              label="Pending fixes"
+              value={`${fixCandidates.length}`}
+              hint={fixCandidates.length > 0 ? "ready to apply" : "nothing pending"}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle>{t("cardCrawl")}</CardTitle>
@@ -1793,6 +1838,7 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
               </CardContent>
             </Card>
           )}
+          </div>
         </div>
       )}
 

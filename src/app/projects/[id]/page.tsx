@@ -3,6 +3,7 @@ import { prisma } from "@/infrastructure/persistence/prisma/prisma-client";
 import { PrismaProjectRepository } from "@/infrastructure/persistence/prisma/prisma-project-repository";
 import { toProjectDto } from "@/application/projects/dto";
 import { ProjectDashboard } from "@/components/project-dashboard";
+import { AppShell } from "@/components/app-shell";
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,8 +12,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   if (!project) notFound();
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
+    <AppShell active="sites">
       <ProjectDashboard project={toProjectDto(project)} />
-    </div>
+    </AppShell>
   );
 }

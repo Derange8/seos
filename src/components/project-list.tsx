@@ -36,29 +36,53 @@ export function ProjectList({ projects }: { projects: ProjectListItem[] }) {
     router.refresh();
   }
 
+  // Verified sites first — they carry real measurement history; unverified are
+  // still in setup.
+  const sorted = [...projects].sort((a, b) => Number(b.isVerified) - Number(a.isVerified));
+
   return (
     <div className="flex w-full flex-col gap-3">
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {projects.map((project) => (
-        <Card key={project.id}>
-          <CardContent className="flex items-center justify-between gap-4 py-4">
-            <Link href={`/projects/${project.id}`} className="flex-1 hover:opacity-80">
-              <p className="font-medium">{project.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {project.domain} · {project.isVerified ? "verified" : "not verified"}
-              </p>
-            </Link>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pendingId === project.id}
-              onClick={() => handleDisconnect(project)}
-            >
-              {pendingId === project.id ? "Disconnecting…" : "Disconnect"}
-            </Button>
-          </CardContent>
-        </Card>
-      ))}
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {sorted.map((project) => (
+          <Card
+            key={project.id}
+            className="group transition-all hover:-translate-y-0.5 hover:border-white/20"
+          >
+            <CardContent className="flex flex-col gap-3 py-4">
+              <div className="flex items-start justify-between gap-2">
+                <Link href={`/projects/${project.id}`} className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{project.name}</p>
+                  <p className="truncate text-sm text-muted-foreground">{project.domain}</p>
+                </Link>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[0.7rem] font-medium ${
+                    project.isVerified ? "bg-primary/15 text-primary" : "bg-white/8 text-muted-foreground"
+                  }`}
+                >
+                  {project.isVerified ? "Verified" : "Setup"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <Link
+                  href={`/projects/${project.id}`}
+                  className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Open dashboard →
+                </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pendingId === project.id}
+                  onClick={() => handleDisconnect(project)}
+                >
+                  {pendingId === project.id ? "Disconnecting…" : "Disconnect"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
