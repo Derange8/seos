@@ -3,9 +3,13 @@ import { PrismaProjectRepository } from "@/infrastructure/persistence/prisma/pri
 import { PrismaAiVisibilityRunRepository } from "@/infrastructure/persistence/prisma/prisma-ai-visibility-run-repository";
 import { PrismaVisibilityExperimentRepository } from "@/infrastructure/persistence/prisma/prisma-visibility-experiment-repository";
 import { PrismaLlmSettingsRepository } from "@/infrastructure/persistence/prisma/prisma-llm-settings-repository";
+import { PrismaLlmCredentialRepository } from "@/infrastructure/persistence/prisma/prisma-llm-credential-repository";
 import { DynamicAiVisibilityModel } from "@/infrastructure/llm/ai-visibility/dynamic-ai-visibility-model";
+import { createAiVisibilityModel } from "@/infrastructure/llm/ai-visibility/create-ai-visibility-model";
 import { RunAiVisibilityProbeUseCase } from "@/application/ai-visibility/use-cases/run-ai-visibility-probe-use-case";
+import { RunMultiEngineProbeUseCase } from "@/application/ai-visibility/use-cases/run-multi-engine-probe-use-case";
 import { ResolveVisibilityExperimentsUseCase } from "@/application/ai-visibility/use-cases/resolve-visibility-experiments-use-case";
+import type { AiVisibilityProbeRun } from "@/domain/ai-visibility/entities/probe-run";
 import type { ProbeTarget } from "@/domain/ai-visibility/entities/probe-target";
 import type { Project } from "@/domain/projects/entities/project";
 import type { Logger } from "@/shared/logger";
@@ -33,11 +37,23 @@ export function startAutoAiVisibilityProbeScheduler(logger: Logger): { stop(): v
   const projectRepository = new PrismaProjectRepository(prisma);
   const runRepository = new PrismaAiVisibilityRunRepository(prisma);
   const experimentRepository = new PrismaVisibilityExperimentRepository(prisma);
-  const model = new DynamicAiVisibilityModel(new PrismaLlmSettingsRepository(prisma), logger);
-  // Scheduled probes sample adaptively too (min 3, up to 5) — an uncertain
-  // query auto-resolves without the user ever re-measuring.
-  const runProbe = new RunAiVisibilityProbeUseCase({
-    model,
+  const credentialRepository = new PrismaLlmCredentialRepository(prisma);
+  // Scheduled probes measure on ALL configured engines (multi-engine, Faz 5.6)
+  // and sample adaptively (min 3, up to 5), matching what "Compare engines"
+  // does by hand — the auto trend shouldn't lag behind the manual one.
+  const runMultiEngine = new RunMultiEngineProbeUseCase({
+    credentialRepository,
+    runRepository,
+    modelFactory: createAiVisibilityModel,
+    samplesPerQuery: 3,
+    maxSamplesPerQuery: 5,
+    logger,
+  });
+  // Fallback for installs that only configured the single "AI Provider"
+  // (LlmSettings) and never added measurement-engine credentials — keeps the
+  // pre-Faz-5.5 single-engine behavior working.
+  const singleEngineProbe = new RunAiVisibilityProbeUseCase({
+    model: new DynamicAiVisibilityModel(new PrismaLlmSettingsRepository(prisma), logger),
     runRepository,
     samplesPerQuery: 3,
     maxSamplesPerQuery: 5,
@@ -76,10 +92,27 @@ export function startAutoAiVisibilityProbeScheduler(logger: Logger): { stop(): v
     });
 
     try {
-      // Scheduled (Otomatik Pilot) probes measure the real AI-search surface,
-      // same as a user-triggered probe — the whole point is an honest trend.
-      const run = await runProbe.execute(project.id, target, "web_grounded");
-      await resolveExperiments.execute(project.id, run);
+      // Scheduled (Otomatik Pilot) probes measure the real AI-search surface on
+      // every configured engine. Each engine produces its own run; resolve
+      // experiments against each.
+      const { runs, failed } = await runMultiEngine.execute(project.id, target, "web_grounded");
+      let measured: AiVisibilityProbeRun[] = runs;
+
+      // No measurement-engine credentials configured → fall back to the single
+      // active LlmSettings so pre-Faz-5.5 installs keep getting a scheduled run.
+      if (runs.length === 0 && failed.length === 0) {
+        measured = [await singleEngineProbe.execute(project.id, target, "web_grounded")];
+      }
+
+      for (const run of measured) {
+        await resolveExperiments.execute(project.id, run);
+      }
+      if (failed.length > 0) {
+        logger.warn("Otomatik Pilot: some engines couldn't be measured", {
+          projectId: project.id,
+          failed: failed.map((f) => f.engine),
+        });
+      }
     } catch (error) {
       logger.error("Otomatik Pilot: scheduled AI-visibility probe failed", {
         projectId: project.id,
