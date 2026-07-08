@@ -22,7 +22,7 @@ import type { AuditDeltaDto } from "@/application/delta-audit/dto";
 import type { WordPressConnectionDto } from "@/application/wordpress/dto";
 import type { SearchPerformanceSnapshotDto, AnalyticsSnapshotDto, KeywordOpportunityDto, KeywordCannibalizationIssueDto, CtrUnderperformerDto } from "@/application/tracking/dto";
 import type { ContentIdeaDto, GrowthAnalysisDto, PageContentDraftDto } from "@/application/content-enrichment/dto";
-import type { AiVisibilityRunDto, AiVisibilityTrendPointDto, VisibilityExperimentDto } from "@/application/ai-visibility/dto";
+import type { AiVisibilityRunDto, AiVisibilityTrendPointDto, VisibilityExperimentDto, MultiEngineComparisonDto } from "@/application/ai-visibility/dto";
 import { AiVisibilityTrendChart } from "@/components/ai-visibility-trend-chart";
 import type { CitationDraft } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { formatAuditReport } from "@/lib/format-audit-report";
@@ -379,6 +379,8 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
   const [aiVisibility, setAiVisibility] = useState<AiVisibilityRunDto | null>(null);
   const [aiVisibilityTrend, setAiVisibilityTrend] = useState<AiVisibilityTrendPointDto[]>([]);
   const [isProbingAiVisibility, setIsProbingAiVisibility] = useState(false);
+  const [engineComparison, setEngineComparison] = useState<MultiEngineComparisonDto | null>(null);
+  const [isComparingEngines, setIsComparingEngines] = useState(false);
   const [isSuggestingQueries, setIsSuggestingQueries] = useState(false);
   const [aiVisibilityError, setAiVisibilityError] = useState<string | null>(null);
   const [aiVisibilityQueries, setAiVisibilityQueries] = useState("");
@@ -839,6 +841,38 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
       for (const item of items) next[item.query] = item.draft;
       return next;
     });
+  }
+
+  // Measure on every configured engine at once and show them side by side.
+  async function handleCompareEngines() {
+    const queries = aiVisibilityQueries.split("\n").map((q) => q.trim()).filter((q) => q.length > 0);
+    if (queries.length === 0) {
+      setAiVisibilityError("Enter at least one target query (one per line).");
+      return;
+    }
+    const competitors = aiVisibilityCompetitors.split(",").map((c) => c.trim()).filter((c) => c.length > 0);
+
+    setIsComparingEngines(true);
+    setAiVisibilityError(null);
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${project.id}/ai-visibility/multi-engine`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ queries, competitors, groundingMode: aiVisibilityWebGrounded ? "web_grounded" : "parametric" }),
+      });
+    } catch {
+      setIsComparingEngines(false);
+      setAiVisibilityError("Network error — check your connection and try again.");
+      return;
+    }
+    const data = await response.json();
+    setIsComparingEngines(false);
+    if (!response.ok) {
+      setAiVisibilityError(data.error ?? "Failed to run the multi-engine comparison");
+      return;
+    }
+    setEngineComparison(data as MultiEngineComparisonDto);
   }
 
   async function handleRunAiVisibilityProbe() {
@@ -1939,6 +1973,15 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                 <Button onClick={handleRunAiVisibilityProbe} disabled={isProbingAiVisibility || isSuggestingQueries} size="sm">
                   {isProbingAiVisibility ? "Measuring…" : aiVisibility ? "Re-measure" : "Measure"}
                 </Button>
+                <Button
+                  onClick={handleCompareEngines}
+                  disabled={isComparingEngines || isProbingAiVisibility}
+                  variant="outline"
+                  size="sm"
+                  title="Measure on every configured engine and compare"
+                >
+                  {isComparingEngines ? "Comparing…" : "Compare engines"}
+                </Button>
               </CardAction>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 text-sm">
@@ -1949,6 +1992,27 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
                 this can take a minute.
               </p>
               {fixPlanError && <p className="text-xs text-amber-300">{fixPlanError}</p>}
+              {engineComparison && (
+                <div className="flex flex-col gap-2 rounded-md border border-white/10 bg-black/20 p-3">
+                  <p className="text-xs font-medium text-muted-foreground">Engine comparison (same queries, each engine)</p>
+                  <div className="flex flex-col gap-1">
+                    {engineComparison.engines.map((e) => (
+                      <div key={e.engine} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+                        <span className="w-20 font-medium">{engineLabel(e.engine)}</span>
+                        <span className="text-green-400">✅ {e.mentionedPct}%</span>
+                        <span className="text-cyan-300">🟢 {e.openPct}%</span>
+                        <span className="text-muted-foreground">⛔ {e.contestedPct}%</span>
+                        <span className="text-amber-300">🔗 {e.citedPct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                  {engineComparison.failed.length > 0 && (
+                    <p className="text-xs text-red-400">
+                      Couldn&apos;t measure: {engineComparison.failed.map((f) => engineLabel(f.engine)).join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <input
                   type="checkbox"

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LlmSettingsForm } from "@/components/llm-settings-form";
+import { LlmCredentialsForm } from "@/components/llm-credentials-form";
 
 export default function SettingsPage() {
   return (
@@ -12,6 +13,7 @@ export default function SettingsPage() {
       </div>
 
       <LlmSettingsForm />
+      <LlmCredentialsForm />
     </div>
   );
 }

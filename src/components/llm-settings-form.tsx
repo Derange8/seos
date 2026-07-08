@@ -11,6 +11,7 @@ const PROVIDER_LABEL: Record<string, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic (Claude)",
   deepseek: "DeepSeek",
+  gemini: "Gemini (Google)",
 };
 
 export function LlmSettingsForm() {
@@ -106,6 +107,7 @@ export function LlmSettingsForm() {
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="deepseek">DeepSeek</option>
+              <option value="gemini">Gemini (Google)</option>
             </select>
           </div>
 
