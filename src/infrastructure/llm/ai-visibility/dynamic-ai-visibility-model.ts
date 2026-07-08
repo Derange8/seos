@@ -10,39 +10,8 @@ import type {
 } from "@/application/ai-visibility/ports/ai-visibility-model-port";
 import { AiVisibilityProviderNotConfiguredError } from "@/application/ai-visibility/errors";
 import type { LlmSettingsRepositoryPort } from "@/application/settings/ports/llm-settings-repository-port";
-import type { LlmProvider } from "@/domain/settings/entities/llm-settings";
 import type { Logger } from "@/shared/logger";
-import { OpenAiAiVisibilityModel } from "@/infrastructure/llm/ai-visibility/openai-ai-visibility-model";
-import { AnthropicAiVisibilityModel } from "@/infrastructure/llm/ai-visibility/anthropic-ai-visibility-model";
-import { GeminiAiVisibilityModel } from "@/infrastructure/llm/ai-visibility/gemini-ai-visibility-model";
-
-const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
-const DEEPSEEK_DEFAULT_MODEL = "deepseek-chat";
-
-function createModelFor(provider: LlmProvider, apiKey: string, model: string | null): AiVisibilityModelPort {
-  switch (provider) {
-    case "openai":
-      // Real OpenAI supports web search (a native tool) → enable web-grounded.
-      return new OpenAiAiVisibilityModel({ apiKey, model: model ?? undefined, supportsWebSearch: true });
-    case "anthropic":
-      // Anthropic's Messages API has its own web_search tool, enabled per-call.
-      return new AnthropicAiVisibilityModel({ apiKey, model: model ?? undefined });
-    case "gemini":
-      // Gemini's native google_search grounding tool. engineId() is "gemini".
-      return new GeminiAiVisibilityModel({ apiKey, model: model ?? undefined });
-    case "deepseek":
-      // DeepSeek is only OpenAI-COMPATIBLE (chat surface) — no web search. Leave
-      // supportsWebSearch off so a web_grounded probe honestly rejects here
-      // instead of silently answering from memory.
-      return new OpenAiAiVisibilityModel({
-        apiKey,
-        model: model ?? DEEPSEEK_DEFAULT_MODEL,
-        baseUrl: DEEPSEEK_API_URL,
-        supportsWebSearch: false,
-        engineId: "deepseek",
-      });
-  }
-}
+import { createAiVisibilityModel } from "@/infrastructure/llm/ai-visibility/create-ai-visibility-model";
 
 // Resolves the configured LLM provider from Settings, exactly like
 // DynamicRecommendationProvider — but unlike that (a long-lived pipeline
@@ -68,7 +37,7 @@ export class DynamicAiVisibilityModel implements AiVisibilityModelPort {
           provider: settings.provider,
           model: settings.model,
         });
-        return createModelFor(settings.provider, settings.apiKey, settings.model);
+        return createAiVisibilityModel(settings.provider, settings.apiKey, settings.model);
       })();
     }
     return this.resolved;

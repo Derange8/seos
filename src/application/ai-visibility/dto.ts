@@ -124,3 +124,46 @@ export function toAiVisibilityRunDto(
     })),
   };
 }
+
+// One engine's standing in a multi-engine comparison — enough for the
+// "ChatGPT 60% / Claude 40% / Gemini 20%" row without shipping every query.
+export interface EngineComparisonEntryDto {
+  engine: string;
+  runAt: string;
+  mentionedPct: number;
+  openPct: number;
+  contestedPct: number;
+  citedPct: number;
+  totalSamples: number;
+}
+
+export interface MultiEngineComparisonDto {
+  // One entry per engine that measured, best-mentioned-first so the strongest
+  // surface reads at the top.
+  engines: EngineComparisonEntryDto[];
+  // Engines asked to measure but that failed (bad key/quota/down).
+  failed: { engine: string; error: string }[];
+}
+
+export function toEngineComparisonEntryDto(run: AiVisibilityProbeRun): EngineComparisonEntryDto {
+  const sc = buildScorecard(run.outcomes);
+  return {
+    engine: run.engine,
+    runAt: run.runAt.toISOString(),
+    mentionedPct: sc.mentionedPct,
+    openPct: sc.openPct,
+    contestedPct: sc.contestedPct,
+    citedPct: sc.citedPct,
+    totalSamples: sc.totalSamples,
+  };
+}
+
+export function toMultiEngineComparisonDto(
+  runs: readonly AiVisibilityProbeRun[],
+  failed: readonly { engine: string; error: string }[]
+): MultiEngineComparisonDto {
+  const engines = runs
+    .map(toEngineComparisonEntryDto)
+    .sort((a, b) => b.mentionedPct - a.mentionedPct);
+  return { engines, failed: [...failed] };
+}

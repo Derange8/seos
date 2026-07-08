@@ -442,6 +442,19 @@ model LlmSettings {
   @@map("llm_settings")
 }
 
+// One stored key per measurement engine (Faz 5.5), the multi-key store the
+// multi-engine probe reads — separate from the single-active LlmSettings the
+// content/audit pipeline uses. Provider is the primary key (at most one row
+// per engine).
+model LlmCredential {
+  provider        LlmProvider @id
+  encryptedApiKey String
+  model           String?
+  updatedAt       DateTime    @updatedAt
+
+  @@map("llm_credentials")
+}
+
 // ---------- Google tracking (Search Console + GA4) ----------
 // One connection per project (1:1), same shape/reasoning as
 // WordPressConnection — a project is one site, so it maps to at most one

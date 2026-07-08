@@ -6,7 +6,7 @@ import { SaveLlmSettingsUseCase } from "@/application/settings/use-cases/save-ll
 import { toLlmSettingsDto } from "@/application/settings/dto";
 import type { LlmProvider } from "@/domain/settings/entities/llm-settings";
 
-const VALID_PROVIDERS: readonly LlmProvider[] = ["openai", "anthropic", "deepseek"];
+const VALID_PROVIDERS: readonly LlmProvider[] = ["openai", "anthropic", "deepseek", "gemini"];
 
 const ERROR_STATUS: Record<string, number> = {
   EMPTY_LLM_API_KEY: 400,
