@@ -7,6 +7,7 @@ export const missingImageAltRule: AuditRule = {
   // Accessibility, not search-ranking — a real visitor on a noindex'd
   // (e.g. logged-in) page still relies on alt text the same as anyone else.
   appliesToNoindexPages: true,
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.imagesMissingAltCount === 0) return [];
     return [

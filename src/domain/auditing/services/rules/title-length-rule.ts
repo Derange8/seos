@@ -14,6 +14,7 @@ const MAX_LENGTH = TITLE_MAX_LENGTH;
 // is a different, more severe issue than one with a too-short/long title.
 export const titleLengthRule: AuditRule = {
   id: "title-length",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     const title = page.title?.trim();
     if (!title) return [];

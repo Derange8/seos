@@ -8,6 +8,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 // data" (the pre-fix behavior) hides a real authoring mistake.
 export const invalidStructuredDataRule: AuditRule = {
   id: "invalid-structured-data",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (!page.hasInvalidStructuredData) return [];
     return [

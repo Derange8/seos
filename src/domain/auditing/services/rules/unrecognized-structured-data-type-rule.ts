@@ -10,6 +10,7 @@ import { isKnownSchemaOrgType } from "@/domain/auditing/services/known-schema-or
 // a page that has several unusual types with duplicate near-identical rows.
 export const unrecognizedStructuredDataTypeRule: AuditRule = {
   id: "unrecognized-structured-data-type",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     const unrecognized = page.structuredDataTypes.filter((type) => !isKnownSchemaOrgType(type));
     if (unrecognized.length === 0) return [];

@@ -25,18 +25,26 @@ export class DetectOrphanPagesUseCase {
       page.crawledAt < earliest.crawledAt ? page : earliest
     );
 
-    const linkedToUrls = new Set<string>();
+    // Counts distinct linking pages, not raw link occurrences — two links
+    // to the same target from one page's nav and footer should count as
+    // one inbound reference, not two, since it's "how many pages point
+    // here" (a real breakage signal) that matters, not "how many <a> tags."
+    const inboundLinkersByUrl = new Map<string, Set<string>>();
     for (const page of pages) {
       for (const link of page.allLinks) {
-        if (link.isInternal) linkedToUrls.add(link.targetUrl.href);
+        if (!link.isInternal) continue;
+        const linkers = inboundLinkersByUrl.get(link.targetUrl.href) ?? new Set<string>();
+        linkers.add(page.id);
+        inboundLinkersByUrl.set(link.targetUrl.href, linkers);
       }
     }
 
     for (const page of pages) {
-      const isOrphan = page.id !== rootPage.id && !linkedToUrls.has(page.url.href);
-      if (isOrphan === page.isOrphan) continue;
+      const inboundInternalLinkCount = inboundLinkersByUrl.get(page.url.href)?.size ?? 0;
+      const isOrphan = page.id !== rootPage.id && inboundInternalLinkCount === 0;
+      if (isOrphan === page.isOrphan && inboundInternalLinkCount === page.inboundInternalLinkCount) continue;
 
-      page.setOrphan(isOrphan);
+      page.setOrphan(isOrphan, inboundInternalLinkCount);
       await this.deps.pageRepository.save(projectId, page);
     }
   }

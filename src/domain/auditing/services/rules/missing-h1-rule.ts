@@ -4,6 +4,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 
 export const missingH1Rule: AuditRule = {
   id: "missing-h1",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.h1 && page.h1.trim().length > 0) return [];
     return [

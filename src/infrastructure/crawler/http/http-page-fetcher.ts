@@ -9,6 +9,15 @@ import { err, ok, type Result } from "@/shared/result";
 // retrying — retrying a loop just reproduces the same loop.
 const MAX_REDIRECTS = 10;
 
+// "text/html; charset=utf-8" -> "text/html" — only the MIME type itself
+// distinguishes HTML from PDF/image/etc., the charset is irrelevant to
+// that decision. Exported so PlaywrightPageRenderer can reuse the same
+// normalization instead of duplicating it.
+export function stripContentTypeSuffix(rawContentType: string | null): string | null {
+  if (!rawContentType) return null;
+  return rawContentType.split(";")[0]?.trim().toLowerCase() || null;
+}
+
 interface HttpPageFetcherOptions {
   timeoutMs?: number;
   userAgent?: string;
@@ -96,6 +105,7 @@ export class HttpPageFetcher implements PageFetcherPort {
         redirectChain,
         renderMode: "HTTP",
         cspHeader: response.headers.get("content-security-policy"),
+        contentType: stripContentTypeSuffix(response.headers.get("content-type")),
       });
     }
 

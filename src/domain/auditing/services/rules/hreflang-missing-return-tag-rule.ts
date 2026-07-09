@@ -10,6 +10,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 // (DetectHreflangReciprocityUseCase) rather than a plain per-page rule.
 export const hreflangMissingReturnTagRule: AuditRule = {
   id: "hreflang-missing-return-tag",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.hreflangMissingReturnTags.length === 0) return [];
 

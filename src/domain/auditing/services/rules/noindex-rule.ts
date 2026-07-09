@@ -8,6 +8,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 export const noindexRule: AuditRule = {
   id: "noindex",
   appliesToNoindexPages: true,
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (!page.isNoindex) return [];
     return [

@@ -4,6 +4,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 
 export const missingCanonicalRule: AuditRule = {
   id: "missing-canonical",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.canonicalUrl && page.canonicalUrl.trim().length > 0) return [];
     return [

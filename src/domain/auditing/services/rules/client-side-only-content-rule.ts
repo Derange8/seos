@@ -13,6 +13,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 // false otherwise, same as every other measured-flag rule in this directory).
 export const clientSideOnlyContentRule: AuditRule = {
   id: "client-side-only-content",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (!page.isClientSideOnlyContent) return [];
     return [

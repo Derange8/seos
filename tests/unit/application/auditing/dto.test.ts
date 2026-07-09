@@ -28,8 +28,18 @@ describe("toAuditRunDto", () => {
     const dto = toAuditRunDto(auditRun, [fixCandidate]);
 
     expect(dto.issues.map((issue) => issue.id)).toEqual([quickWin.id, lowPriority.id]);
-    expect(dto.issues[0]?.priority).toEqual({ tier: "QUICK_WIN", impactScore: 10, hasReadyFix: true });
-    expect(dto.issues[1]?.priority).toEqual({ tier: "LOW_PRIORITY", impactScore: 1, hasReadyFix: false });
+    expect(dto.issues[0]?.priority).toEqual({
+      tier: "QUICK_WIN",
+      impactScore: 10,
+      hasReadyFix: true,
+      estimatedFixTime: "ONE_MINUTE",
+    });
+    expect(dto.issues[1]?.priority).toEqual({
+      tier: "LOW_PRIORITY",
+      impactScore: 1,
+      hasReadyFix: false,
+      estimatedFixTime: "FIFTEEN_MINUTES_PLUS",
+    });
   });
 
   it("defaults every issue to no ready fix when fixCandidates is omitted", () => {
@@ -45,7 +55,12 @@ describe("toAuditRunDto", () => {
 
     const dto = toAuditRunDto(auditRun);
 
-    expect(dto.issues[0]?.priority).toEqual({ tier: "MANUAL_REVIEW", impactScore: 10, hasReadyFix: false });
+    expect(dto.issues[0]?.priority).toEqual({
+      tier: "MANUAL_REVIEW",
+      impactScore: 10,
+      hasReadyFix: false,
+      estimatedFixTime: "FIVE_MINUTES",
+    });
   });
 
   it("ranks trafficImpact by real page traffic when pages/pagePerformance are supplied", () => {

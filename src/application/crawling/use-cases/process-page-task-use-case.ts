@@ -198,6 +198,7 @@ export class ProcessPageTaskUseCase {
       canonicalTagCount: parsed.canonicalTagCount,
       isNoindex: parsed.isNoindex,
       cspHeader: fetched.cspHeader,
+      contentType: fetched.contentType,
       externalScriptOrigins: parsed.externalScriptOrigins,
       hreflangLinks: parsed.hreflangLinks,
       rawWordCount,

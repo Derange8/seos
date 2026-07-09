@@ -143,6 +143,16 @@ export const TRANSLATIONS = {
   noDataYet: { en: "no data yet", tr: "veri yok" },
   impressionsAbbrev: { en: "impr.", tr: "gösterim" },
   impressionsSlashClicksLast30Days: { en: "impressions / {clicks} clicks (last 30 days)", tr: "gösterim / {clicks} tıklama (son 30 gün)" },
+  estimatedFixTimeOneMinute: { en: "~1 min to fix", tr: "~1 dk sürer" },
+  estimatedFixTimeFiveMinutes: { en: "~5 min to fix", tr: "~5 dk sürer" },
+  estimatedFixTimeFifteenPlus: { en: "~15+ min to fix", tr: "~15+ dk sürer" },
+  aiRecommendationLabel: { en: "AI recommendation", tr: "AI önerisi" },
+  fixAllCount: { en: "Fix all ({count})", tr: "Tümünü düzelt ({count})" },
+  fixingAllEllipsis: { en: "Fixing all…", tr: "Tümü düzeltiliyor…" },
+  fixAllPartialFailure: {
+    en: "{failed} of {total} failed to apply — see individual rows below",
+    tr: "{total} içinden {failed} tanesi uygulanamadı — aşağıdaki satırlara bakın",
+  },
 
   // --- Overview tab ---
   seoHealth: { en: "SEO Health", tr: "SEO Sağlığı" },
@@ -190,6 +200,14 @@ export const TRANSLATIONS = {
   showPages: { en: "Show pages", tr: "Sayfaları göster" },
   pagesMatchTemplate: { en: "pages match this template (e.g.", tr: "sayfa bu şablonla eşleşiyor (örn." },
   fixingTemplateFixesAll: { en: ") — fixing the template fixes all of them", tr: ") — şablonu düzeltmek hepsini düzeltir" },
+  filterAll: { en: "All", tr: "Tümü" },
+  filterCritical: { en: "Critical", tr: "Kritik" },
+  filterWarning: { en: "Warning", tr: "Uyarı" },
+  filterInfo: { en: "Info", tr: "Bilgi" },
+  noIssuesMatchFilter: {
+    en: "No issues match this filter.",
+    tr: "Bu filtreyle eşleşen sorun yok.",
+  },
 
   // --- Growth tab ---
   aiVisibilityDescription: {
@@ -542,6 +560,33 @@ export const PRIORITY_BADGE_VARIANT: Record<string, "default" | "secondary" | "d
   LOW: "secondary",
 };
 
+// PriorityTier (issue-prioritizer.ts) badge styling — QUICK_WIN gets the
+// strongest accent since it's the "do this now" cell of the impact x ease
+// matrix (high impact, ready fix); the rest fade out from there.
+export const PRIORITY_TIER_BADGE_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
+  QUICK_WIN: "default",
+  MANUAL_REVIEW: "secondary",
+  FILL_IN: "outline",
+  LOW_PRIORITY: "outline",
+};
+
+// TrafficImpactTier (traffic-impact-calculator.ts) badge styling — P1 is a
+// relative top-quartile ranking within this audit run, not an absolute
+// traffic guarantee (see that file's own comments), so it gets emphasis
+// without alarm-red.
+export const TRAFFIC_IMPACT_BADGE_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
+  P1: "default",
+  P2: "secondary",
+  P3: "outline",
+  P4: "outline",
+};
+
+export const FIX_TIME_LABEL_KEY: Record<string, TranslationKey> = {
+  ONE_MINUTE: "estimatedFixTimeOneMinute",
+  FIVE_MINUTES: "estimatedFixTimeFiveMinutes",
+  FIFTEEN_MINUTES_PLUS: "estimatedFixTimeFifteenPlus",
+};
+
 export const EVENT_TYPE_LABEL: Record<string, { en: string; tr: string }> = {
   CrawlJobCompleted: { en: "Processing the crawl results", tr: "Tarama sonuçları işleniyor" },
   AuditRunCompleted: { en: "Processing the audit results", tr: "Denetim sonuçları işleniyor" },
@@ -663,7 +708,14 @@ export function IssueRow({
           {issue.ruleId} · {issue.category}
         </p>
         {issue.recommendation ? (
-          <p className="mt-1 text-xs italic text-zinc-600 dark:text-muted-foreground/70">{issue.recommendation}</p>
+          <div className="mt-1.5 flex gap-2 border-l-2 border-primary/40 pl-2.5">
+            <div>
+              <p className="text-[10px] font-medium tracking-wide text-primary/80 uppercase">
+                {t("aiRecommendationLabel")}
+              </p>
+              <p className="text-xs text-zinc-600 dark:text-muted-foreground/80">{issue.recommendation}</p>
+            </div>
+          </div>
         ) : (
           <p className="mt-1 text-xs text-muted-foreground/70">{t("generatingRecommendation")}</p>
         )}
@@ -729,19 +781,25 @@ export function IssueRow({
           </div>
         )}
       </div>
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex flex-col items-end gap-1.5">
         <Badge variant={SEVERITY_BADGE_VARIANT[issue.severity] ?? "default"}>{SEVERITY_LABEL[issue.severity]?.[language] ?? issue.severity}</Badge>
-        <span className="text-xs text-muted-foreground">{PRIORITY_TIER_LABEL[issue.priority.tier]?.[language] ?? issue.priority.tier}</span>
-        <span
-          className="text-xs text-muted-foreground"
+        <Badge variant={PRIORITY_TIER_BADGE_VARIANT[issue.priority.tier] ?? "outline"}>
+          {PRIORITY_TIER_LABEL[issue.priority.tier]?.[language] ?? issue.priority.tier}
+        </Badge>
+        <Badge
+          variant={issue.trafficImpact.hasTrafficData ? (TRAFFIC_IMPACT_BADGE_VARIANT[issue.trafficImpact.tier] ?? "outline") : "outline"}
           title={
             issue.trafficImpact.hasTrafficData
               ? `${issue.trafficImpact.pageImpressions} ${t("impressionsSlashClicksLast30Days").replace("{clicks}", String(issue.trafficImpact.pageClicks))}`
               : t("noTrafficDataTooltip")
           }
         >
-          {issue.trafficImpact.tier} {t("trafficImpact")}
-          {issue.trafficImpact.hasTrafficData ? ` (${issue.trafficImpact.pageImpressions} ${t("impressionsAbbrev")})` : ` (${t("noDataYet")})`}
+          {issue.trafficImpact.hasTrafficData
+            ? `${issue.trafficImpact.tier} · ${issue.trafficImpact.pageImpressions} ${t("impressionsAbbrev")}`
+            : t("noDataYet")}
+        </Badge>
+        <span className="text-[11px] text-muted-foreground/70">
+          {t(FIX_TIME_LABEL_KEY[issue.priority.estimatedFixTime] ?? "estimatedFixTimeFiveMinutes")}
         </span>
       </div>
     </div>

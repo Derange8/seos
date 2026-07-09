@@ -75,10 +75,17 @@ describe("DetectOrphanPagesUseCase", () => {
     expect(about.isOrphan).toBe(false);
   });
 
-  it("only re-saves pages whose orphan flag actually changed", async () => {
+  it("only re-saves pages whose orphan flag or inbound link count actually changed", async () => {
     const pageRepository = new FakePageRepository();
+    // Pre-seeded with the count this run will also compute (1), so the
+    // second pass below is a true no-op re-run, not a first-time
+    // computation — isolates "does re-running with no changes skip
+    // saves" from "does the very first count ever get written."
     const home = Page.create("job-1", url("https://example.com/"), { statusCode: 200 });
-    const about = Page.create("job-1", url("https://example.com/about"), { statusCode: 200 });
+    const about = Page.create("job-1", url("https://example.com/about"), {
+      statusCode: 200,
+      inboundInternalLinkCount: 1,
+    });
     home.addLink(Link.create(home.id, home.url, about.url));
     await pageRepository.save("project-1", home);
     await pageRepository.save("project-1", about);
@@ -87,5 +94,28 @@ describe("DetectOrphanPagesUseCase", () => {
     await useCase.execute("project-1", "job-1");
 
     expect(pageRepository.saved).toHaveLength(2);
+  });
+
+  it("computes how many distinct pages link to each URL, feeding broken-status-code-rule's severity tiering", async () => {
+    const pageRepository = new FakePageRepository();
+    const home = Page.create("job-1", url("https://example.com/"), { statusCode: 200 });
+    const about = Page.create("job-1", url("https://example.com/about"), { statusCode: 200 });
+    const missing = Page.create("job-1", url("https://example.com/missing"), { statusCode: 404 });
+    // Two distinct linkers to /missing (home and about), plus a duplicate
+    // link from home itself — should count as 2, not 3, since it's
+    // "how many pages point here" that matters, not raw <a> tag count.
+    home.addLink(Link.create(home.id, home.url, about.url));
+    home.addLink(Link.create(home.id, home.url, missing.url));
+    home.addLink(Link.create(home.id, home.url, missing.url));
+    about.addLink(Link.create(about.id, about.url, missing.url));
+    await pageRepository.save("project-1", home);
+    await pageRepository.save("project-1", about);
+    await pageRepository.save("project-1", missing);
+
+    const useCase = new DetectOrphanPagesUseCase({ pageRepository });
+    await useCase.execute("project-1", "job-1");
+
+    expect(missing.inboundInternalLinkCount).toBe(2);
+    expect(missing.isOrphan).toBe(false);
   });
 });

@@ -52,6 +52,11 @@ export function useCrawlAudit(projectId: string, t: (key: TranslationKey) => str
   // disable the buttons on every other one.
   const [fixActionPendingId, setFixActionPendingId] = useState<string | null>(null);
   const [fixActionErrors, setFixActionErrors] = useState<Record<string, string>>({});
+  // Keyed by the group's ruleId (or ruleId::routeTemplate for a template
+  // sub-group) — "Fix All" disables only the button for the group actually
+  // being applied, not every group's button on the page.
+  const [fixAllPendingKey, setFixAllPendingKey] = useState<string | null>(null);
+  const [fixAllErrors, setFixAllErrors] = useState<Record<string, string>>({});
   // Which rule-id groups are expanded in the Issues tab — the same
   // underlying defect (e.g. a client-rendered page template) often fires
   // the same rule on a dozen pages, and a flat list of 184 individual
@@ -318,6 +323,64 @@ export function useCrawlAudit(projectId: string, t: (key: TranslationKey) => str
     setFixCandidates((candidates) => candidates.map((candidate) => (candidate.id === fixId ? data : candidate)));
   }
 
+  // Applies every ready fix in one rule/route-template group with a single
+  // click. Always resolves (never throws) — a partial failure just leaves
+  // the failed candidates' own per-fix error state populated (via
+  // fixActionErrors, the same map handleApplyFix already uses), so each
+  // failed row still shows its own actionable error rather than the whole
+  // group silently failing together.
+  async function handleApplyFixAll(groupKey: string, fixCandidateIds: string[]) {
+    setFixAllPendingKey(groupKey);
+    setFixAllErrors((errors) => ({ ...errors, [groupKey]: "" }));
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/v1/projects/${projectId}/fixes/apply-batch`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fixCandidateIds }),
+      });
+    } catch {
+      setFixAllPendingKey(null);
+      setFixAllErrors((errors) => ({ ...errors, [groupKey]: t("networkErrorRetry") }));
+      return;
+    }
+    const data = await response.json();
+
+    setFixAllPendingKey(null);
+    if (!response.ok) {
+      setFixAllErrors((errors) => ({ ...errors, [groupKey]: data.error ?? t("failedToApplyFix") }));
+      return;
+    }
+
+    const results: Array<{ fixCandidateId: string; status: "applied" | "failed"; error?: string }> = data.results;
+    const failedById = new Map(results.filter((r) => r.status === "failed").map((r) => [r.fixCandidateId, r.error]));
+
+    // Re-fetch rather than patch fixCandidates locally — an applied
+    // candidate's previousValue (needed for the Revert button) is set
+    // server-side and never comes back in the batch response, only a
+    // fresh read of the full list has it.
+    if (crawlJob) {
+      const refreshed = await fetch(`/api/v1/projects/${projectId}/crawl/${crawlJob.id}/fixes`)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+      if (refreshed) setFixCandidates(refreshed);
+    }
+    if (failedById.size > 0) {
+      setFixActionErrors((errors) => {
+        const next = { ...errors };
+        for (const [id, error] of failedById) next[id] = error ?? t("failedToApplyFix");
+        return next;
+      });
+      setFixAllErrors((errors) => ({
+        ...errors,
+        [groupKey]: t("fixAllPartialFailure")
+          .replace("{failed}", String(failedById.size))
+          .replace("{total}", String(fixCandidateIds.length)),
+      }));
+    }
+  }
+
   function toggleRuleExpanded(ruleId: string) {
     setExpandedRuleIds((current) => {
       const next = new Set(current);
@@ -406,11 +469,14 @@ export function useCrawlAudit(projectId: string, t: (key: TranslationKey) => str
     eventFailures,
     fixActionPendingId,
     fixActionErrors,
+    fixAllPendingKey,
+    fixAllErrors,
     expandedRuleIds,
     toggleRuleExpanded,
     issueGroups,
     handleStartCrawl,
     handleApplyFix,
     handleRevertFix,
+    handleApplyFixAll,
   };
 }

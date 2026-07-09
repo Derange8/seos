@@ -128,4 +128,33 @@ describe("analyzeSitemapXml", () => {
     const xml = `<sitemapindex><sitemap><loc>https://example.com/sitemap-1.xml</loc></sitemap></sitemapindex>`;
     expect(analyzeSitemapXml(xml).isValid).toBe(true);
   });
+
+  it("extracts the actual <loc> URLs, not just a count", () => {
+    const xml = `<?xml version="1.0"?>
+      <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+        <url><loc>https://example.com/</loc></url>
+        <url><loc>https://example.com/about</loc></url>
+      </urlset>`;
+    expect(analyzeSitemapXml(xml).urls).toEqual([
+      "https://example.com/",
+      "https://example.com/about",
+    ]);
+  });
+
+  it("decodes XML entities in extracted URLs (e.g. & in a query string)", () => {
+    const xml = `<urlset xmlns="x"><url><loc>https://example.com/search?q=a&amp;b=c</loc></url></urlset>`;
+    expect(analyzeSitemapXml(xml).urls).toEqual(["https://example.com/search?q=a&b=c"]);
+  });
+
+  it("returns an empty urls array for an invalid or empty sitemap", () => {
+    expect(analyzeSitemapXml("").urls).toEqual([]);
+    expect(analyzeSitemapXml("<html><body>404</body></html>").urls).toEqual([]);
+  });
+
+  it("flags a <sitemapindex> root as isSitemapIndex, distinct from a <urlset>", () => {
+    const index = `<sitemapindex><sitemap><loc>https://example.com/page-sitemap.xml</loc></sitemap></sitemapindex>`;
+    const urlset = `<urlset><url><loc>https://example.com/</loc></url></urlset>`;
+    expect(analyzeSitemapXml(index).isSitemapIndex).toBe(true);
+    expect(analyzeSitemapXml(urlset).isSitemapIndex).toBe(false);
+  });
 });

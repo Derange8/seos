@@ -3,6 +3,7 @@ import type { AuditCategory, AuditSeverity } from "@/domain/auditing/entities/au
 import type { FixCandidate } from "@/domain/fixes/entities/fix-candidate";
 import { prioritizeIssues, type PriorityTier } from "@/domain/fixes/services/issue-prioritizer";
 import { calculateTrafficImpact, type TrafficImpactTier } from "@/domain/fixes/services/traffic-impact-calculator";
+import { estimateFixTime, type FixTimeEstimate } from "@/domain/fixes/services/fix-time-estimate";
 import { deriveRouteTemplates } from "@/domain/auditing/services/route-template";
 import type { PagePerformance } from "@/domain/tracking/entities/page-performance";
 
@@ -10,6 +11,7 @@ export interface AuditIssuePriorityDto {
   tier: PriorityTier;
   impactScore: number;
   hasReadyFix: boolean;
+  estimatedFixTime: FixTimeEstimate;
 }
 
 export interface AuditIssueTrafficImpactDto {
@@ -59,6 +61,7 @@ export function toAuditRunDto(
 ): AuditRunDto {
   const priorities = prioritizeIssues(auditRun.issues, fixCandidates);
   const priorityByIssueId = new Map(priorities.map((priority) => [priority.issueId, priority]));
+  const fixCandidateByIssueId = new Map(fixCandidates.map((candidate) => [candidate.auditIssueId, candidate]));
   const trafficImpacts = calculateTrafficImpact(auditRun.issues, pageUrlsByPageId, pagePerformance);
   const trafficImpactByIssueId = new Map(trafficImpacts.map((impact) => [impact.issueId, impact]));
   // Derived from every crawled page's URL (not just the ones with issues)
@@ -100,6 +103,7 @@ export function toAuditRunDto(
           tier: priority?.tier ?? "LOW_PRIORITY",
           impactScore: priority?.impactScore ?? 0,
           hasReadyFix: priority?.hasReadyFix ?? false,
+          estimatedFixTime: estimateFixTime(issue.category, fixCandidateByIssueId.get(issue.id)?.type ?? null),
         },
         trafficImpact: {
           tier: trafficImpact?.tier ?? "P4",

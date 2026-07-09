@@ -12,6 +12,7 @@ const MAX_LENGTH = META_DESCRIPTION_MAX_LENGTH;
 
 export const metaDescriptionLengthRule: AuditRule = {
   id: "meta-description-length",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     const description = page.metaDescription?.trim();
     if (!description) return [];

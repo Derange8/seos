@@ -4,6 +4,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 
 export const duplicateMetaDescriptionRule: AuditRule = {
   id: "duplicate-meta-description",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (!page.hasDuplicateMetaDescription) return [];
     return [

@@ -58,6 +58,33 @@ export function robotsHasSitemapDirective(rawRobotsTxt: string): boolean {
 export interface SitemapXmlAnalysis {
   isValid: boolean;
   urlCount: number;
+  // The actual <loc> URLs, decoded and trimmed — lets a caller
+  // cross-reference "is this specific crawled URL listed in the live
+  // sitemap." Not deduplicated against urlCount deliberately: urlCount is
+  // the raw <loc>-tag count (a well-formedness signal, matches how many
+  // tags actually appeared), while urls.length may differ slightly if any
+  // entries failed to decode — see the filter below.
+  urls: string[];
+  // True when the root element is <sitemapindex> rather than <urlset> —
+  // very common on real sites (WordPress/Yoast, most large CMSes split
+  // page URLs across post-sitemap.xml/page-sitemap.xml/etc. and list only
+  // those *sitemap* URLs, not page URLs, in urls above). A caller that
+  // wants actual page URLs needs to follow each of those into a second
+  // analyzeSitemapXml call — see AuditRobotsAndSitemapUseCase.
+  isSitemapIndex: boolean;
+}
+
+// XML entities a real sitemap.xml can legally contain inside a <loc> (URLs
+// often carry "&" as "&amp;" for query strings) — decoding only these five
+// named entities (not numeric character references) covers what sitemap
+// generators actually emit without pulling in a full XML parser.
+function decodeXmlEntities(raw: string): string {
+  return raw
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"');
 }
 
 // Presence-only XML well-formedness + <url>/<loc> counting — a full XML
@@ -67,7 +94,7 @@ export interface SitemapXmlAnalysis {
 export function analyzeSitemapXml(rawSitemapXml: string): SitemapXmlAnalysis {
   const trimmed = rawSitemapXml.trim();
   if (trimmed.length === 0) {
-    return { isValid: false, urlCount: 0 };
+    return { isValid: false, urlCount: 0, urls: [], isSitemapIndex: false };
   }
 
   // DOMParser isn't available in a plain Node context and pulling in a
@@ -76,9 +103,10 @@ export function analyzeSitemapXml(rawSitemapXml: string): SitemapXmlAnalysis {
   // enough (an <urlset>/<sitemapindex> root, well-formed tags) that regex
   // tag-balance checking catches the realistic failure modes (truncated
   // file, HTML error page served instead of XML, stray unescaped "&").
+  const isSitemapIndex = /<sitemapindex/i.test(trimmed);
   const hasXmlDeclarationOrRoot = /<\?xml|<urlset|<sitemapindex/i.test(trimmed);
   if (!hasXmlDeclarationOrRoot) {
-    return { isValid: false, urlCount: 0 };
+    return { isValid: false, urlCount: 0, urls: [], isSitemapIndex: false };
   }
 
   // Self-closing tags (<loc/>) never match either regex below (the open
@@ -90,7 +118,10 @@ export function analyzeSitemapXml(rawSitemapXml: string): SitemapXmlAnalysis {
   const closeTags = trimmed.match(/<\/[a-zA-Z][\w:-]*>/g)?.length ?? 0;
   const isBalanced = openTags === closeTags;
 
-  const urlCount = (trimmed.match(/<loc>/gi) ?? []).length;
+  const locMatches = trimmed.match(/<loc>([^<]*)<\/loc>/gi) ?? [];
+  const urls = locMatches
+    .map((tag) => decodeXmlEntities(tag.replace(/<\/?loc>/gi, "").trim()))
+    .filter((url) => url.length > 0);
 
-  return { isValid: isBalanced, urlCount };
+  return { isValid: isBalanced, urlCount: locMatches.length, urls, isSitemapIndex };
 }

@@ -86,6 +86,24 @@ export interface PageAttributes {
   // hasDuplicateTitle above). The crawl's root page is never orphaned by
   // definition, even though nothing within the crawl links to it either.
   isOrphan?: boolean;
+  // How many distinct crawled pages link to this URL internally — computed
+  // by the same DetectOrphanPagesUseCase pass as isOrphan (isOrphan is just
+  // this count being zero, kept as its own field since existing rules/UI
+  // already read the boolean). Lets broken-status-code-rule distinguish a
+  // 404 with 40 inbound links (real breakage) from one with none (likely a
+  // deliberately removed page nobody references anymore).
+  inboundInternalLinkCount?: number;
+  // Whether this exact URL appears as a <loc> entry in the site's live
+  // sitemap.xml — computed by the same AuditRobotsAndSitemapUseCase pass
+  // that sets robotsBlocksEntireSite/sitemapIsUnreachable below, but
+  // per-page rather than site-level (see that use case for why it's
+  // structured differently from its other, root-page-only flags). Null
+  // means "the sitemap itself couldn't be fetched/parsed this run" (see
+  // sitemapIsUnreachable/sitemapIsInvalidXml) — not the same as false
+  // ("fetched fine, this URL just isn't in it"). A URL in the sitemap
+  // being broken is a strong signal the site owner still intends visitors
+  // to reach it — feeds broken-status-code-rule's severity tiering.
+  isInSitemap?: boolean | null;
   // Raw Content-Security-Policy response header (see PageFetchResult.cspHeader),
   // null when the page sent none. Feeds the csp-blocks-script rule.
   cspHeader?: string | null;
@@ -154,6 +172,13 @@ export interface PageAttributes {
   // page-level check alone can catch. Empty when hreflangLinks is empty or
   // every link is reciprocated.
   hreflangMissingReturnTags?: readonly HreflangLink[];
+  // Response Content-Type header (see PageFetchResult.contentType),
+  // stripped of charset, e.g. "application/pdf", "text/html". Null means
+  // either the header was absent or (for pages crawled before this field
+  // existed) never captured — both treated as HTML by
+  // AuditRule.isHtmlOnly filtering, since that was the only content type
+  // Seos audited before non-HTML awareness existed.
+  contentType?: string | null;
 }
 
 export interface PageProps extends Required<PageAttributes> {
@@ -197,6 +222,8 @@ export class Page {
       canonicalTagCount: attributes.canonicalTagCount ?? 0,
       isNoindex: attributes.isNoindex ?? false,
       isOrphan: attributes.isOrphan ?? false,
+      inboundInternalLinkCount: attributes.inboundInternalLinkCount ?? 0,
+      isInSitemap: attributes.isInSitemap ?? null,
       cspHeader: attributes.cspHeader ?? null,
       externalScriptOrigins: attributes.externalScriptOrigins ?? [],
       rawWordCount: attributes.rawWordCount ?? null,
@@ -210,6 +237,7 @@ export class Page {
       tbtMs: attributes.tbtMs ?? null,
       hreflangLinks: attributes.hreflangLinks ?? [],
       hreflangMissingReturnTags: attributes.hreflangMissingReturnTags ?? [],
+      contentType: attributes.contentType ?? null,
     });
   }
 
@@ -338,6 +366,23 @@ export class Page {
     return this.props.isOrphan;
   }
 
+  get inboundInternalLinkCount(): number {
+    return this.props.inboundInternalLinkCount;
+  }
+
+  get isInSitemap(): boolean | null {
+    return this.props.isInSitemap;
+  }
+
+  // Recomputed wholesale on every AuditRobotsAndSitemapUseCase run, same
+  // rationale as setRobotsAndSitemapFlags — a site's live sitemap.xml can
+  // gain or drop URLs between crawls, and can also simply become
+  // unreachable (null), which is a different fact from "reachable but
+  // this URL isn't listed" (false).
+  setIsInSitemap(isInSitemap: boolean | null): void {
+    this.props.isInSitemap = isInSitemap;
+  }
+
   get cspHeader(): string | null {
     return this.props.cspHeader;
   }
@@ -390,6 +435,21 @@ export class Page {
     return this.props.hreflangMissingReturnTags;
   }
 
+  get contentType(): string | null {
+    return this.props.contentType;
+  }
+
+  // Whether this page's content is (or is assumed to be) HTML — the only
+  // basis on which HTML-structure audit rules (missing title/H1/meta,
+  // thin-content, etc.) make sense. A null contentType (header absent, or
+  // page crawled before this field existed) defaults to true: every page
+  // audited so far was HTML, so treating "unknown" as HTML preserves
+  // existing behavior instead of silently exempting old data.
+  isHtml(): boolean {
+    if (this.props.contentType === null) return true;
+    return this.props.contentType === "text/html" || this.props.contentType === "application/xhtml+xml";
+  }
+
   // Recomputed wholesale on every DetectHreflangReciprocityUseCase run,
   // same rationale as setDuplicateFlags/setOrphan — a target page's own
   // hreflang tags can change between crawls.
@@ -414,9 +474,14 @@ export class Page {
 
   // Same rationale as setDuplicateFlags: recomputed wholesale on every
   // DetectOrphanPagesUseCase run, not a one-way transition — a page can
-  // gain or lose its only internal link between crawls.
-  setOrphan(isOrphan: boolean): void {
+  // gain or lose its inbound links between crawls. Takes both fields
+  // together (not two separate setters) since they're always derived from
+  // the same pass over the crawl's Link rows — isOrphan is just
+  // inboundInternalLinkCount === 0, so letting them diverge would be a bug,
+  // not a legitimate state.
+  setOrphan(isOrphan: boolean, inboundInternalLinkCount = 0): void {
     this.props.isOrphan = isOrphan;
+    this.props.inboundInternalLinkCount = inboundInternalLinkCount;
   }
 
   get crawledAt(): Date {

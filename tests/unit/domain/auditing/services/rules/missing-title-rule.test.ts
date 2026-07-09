@@ -6,7 +6,7 @@ describe("missingTitleRule", () => {
   it("flags a page with no title", () => {
     const findings = missingTitleRule.evaluate(buildPage({ title: null }));
     expect(findings).toHaveLength(1);
-    expect(findings[0]?.severity).toBe("CRITICAL");
+    expect(findings[0]?.severity).toBe("WARNING");
   });
 
   it("flags a page with a blank title", () => {

@@ -8,6 +8,7 @@ export const cspBlocksScriptRule: AuditRule = {
   // Security, not search-ranking — applies whether or not the page is
   // meant to be indexed.
   appliesToNoindexPages: true,
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (!page.cspHeader || page.externalScriptOrigins.length === 0) return [];
 

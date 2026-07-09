@@ -3,6 +3,7 @@ import type { PageRendererPort, RenderOptions } from "@/application/crawling/por
 import { PageFetchError, type PageFetchResult } from "@/application/crawling/ports/page-fetch-result";
 import { Url } from "@/domain/crawling/value-objects/url";
 import { findPrivateNetworkAddress } from "@/infrastructure/crawler/http/private-network-guard";
+import { stripContentTypeSuffix } from "@/infrastructure/crawler/http/http-page-fetcher";
 import { err, ok, type Result } from "@/shared/result";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -71,6 +72,7 @@ export class PlaywrightPageRenderer implements PageRendererPort {
         );
       }
 
+      const headers = await response.allHeaders();
       return ok({
         finalUrl: finalUrlResult.value,
         statusCode: response.status(),
@@ -78,7 +80,8 @@ export class PlaywrightPageRenderer implements PageRendererPort {
         responseTimeMs: Math.round(performance.now() - startedAt),
         redirectChain: this.extractRedirectChain(response),
         renderMode: "PLAYWRIGHT",
-        cspHeader: (await response.allHeaders())["content-security-policy"] ?? null,
+        cspHeader: headers["content-security-policy"] ?? null,
+        contentType: stripContentTypeSuffix(headers["content-type"] ?? null),
       });
     } catch (cause) {
       return err(this.toFetchError(cause, url.href));

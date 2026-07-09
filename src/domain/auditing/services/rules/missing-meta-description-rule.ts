@@ -4,6 +4,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 
 export const missingMetaDescriptionRule: AuditRule = {
   id: "missing-meta-description",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.metaDescription && page.metaDescription.trim().length > 0) return [];
     return [

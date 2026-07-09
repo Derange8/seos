@@ -27,5 +27,14 @@ export interface AuditRule {
   // alt text, mixed content) still matter regardless of indexability and
   // opt back in, same as broken-status-code does for failed pages.
   readonly appliesToNoindexPages?: boolean;
+  // Rules that assume parsed HTML structure (missing title/H1/meta
+  // description, title/meta length, thin content, etc.) are meaningless
+  // against a PDF, image, or other non-HTML resource — a PDF has no
+  // <h1> to be missing. Defaults to false (applies to every content
+  // type) since most rules — broken links, status codes, response time,
+  // mixed content — are format-agnostic. See Page.isHtml() for how
+  // "HTML" is determined, including its default for pages crawled
+  // before content-type tracking existed.
+  readonly isHtmlOnly?: boolean;
   evaluate(page: Page): AuditFinding[];
 }

@@ -17,6 +17,11 @@ export interface PageFetchResult {
   // browser actually load the external scripts it references is only
   // knowable from this header, not from the HTML alone.
   cspHeader: string | null;
+  // Response Content-Type header, stripped of any charset/boundary suffix
+  // (e.g. "application/pdf", "text/html"), null when absent. Lets
+  // HTML-structure audit rules (missing title/H1/meta, etc.) skip
+  // non-HTML resources instead of flagging a PDF for lacking an <h1>.
+  contentType: string | null;
 }
 
 export type PageFetchErrorCode =

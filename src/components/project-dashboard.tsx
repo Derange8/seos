@@ -193,6 +193,9 @@ export function ProjectDashboard({ project: initialProject }: { project: Project
           setCopiedFixId={crawlAudit.setCopiedFixId}
           handleApplyFix={crawlAudit.handleApplyFix}
           handleRevertFix={crawlAudit.handleRevertFix}
+          fixAllPendingKey={crawlAudit.fixAllPendingKey}
+          fixAllErrors={crawlAudit.fixAllErrors}
+          handleApplyFixAll={crawlAudit.handleApplyFixAll}
           t={t}
           language={language}
         />

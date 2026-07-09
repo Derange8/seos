@@ -106,6 +106,44 @@ describe("RunAuditUseCase", () => {
     expect(ruleIds).not.toContain("thin-content");
   });
 
+  it("skips HTML-only rules for a non-HTML resource (e.g. a PDF), but still reports format-agnostic findings", async () => {
+    const pageRepository = new FakePageRepository();
+    await pageRepository.save(
+      "project-1",
+      Page.create("job-1", url("https://example.com/brochure.pdf"), {
+        title: null,
+        statusCode: 200,
+        responseTimeMs: 20_000,
+        contentType: "application/pdf",
+      })
+    );
+
+    const auditRunRepository = new FakeAuditRunRepository();
+    const useCase = new RunAuditUseCase({ pageRepository, auditRunRepository });
+
+    const auditRun = await useCase.execute("project-1", "job-1");
+
+    const ruleIds = auditRun.issues.map((issue) => issue.ruleId);
+    expect(ruleIds).not.toContain("missing-title");
+    expect(ruleIds).not.toContain("thin-content");
+    expect(ruleIds).toContain("slow-response-time");
+  });
+
+  it("still runs HTML-only rules for a page with no contentType recorded (null treated as HTML)", async () => {
+    const pageRepository = new FakePageRepository();
+    await pageRepository.save(
+      "project-1",
+      Page.create("job-1", url("https://example.com/legacy"), { title: null, statusCode: 200, contentType: null })
+    );
+
+    const auditRunRepository = new FakeAuditRunRepository();
+    const useCase = new RunAuditUseCase({ pageRepository, auditRunRepository });
+
+    const auditRun = await useCase.execute("project-1", "job-1");
+
+    expect(auditRun.issues.map((issue) => issue.ruleId)).toContain("missing-title");
+  });
+
   it("still runs rules normally for a page with no statusCode recorded yet (null, not a known failure)", async () => {
     const pageRepository = new FakePageRepository();
     await pageRepository.save(

@@ -4,6 +4,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 
 export const multipleH1Rule: AuditRule = {
   id: "multiple-h1",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.h1Count <= 1) return [];
     return [

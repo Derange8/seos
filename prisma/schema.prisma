@@ -134,6 +134,16 @@ model Page {
   // page in the crawl job links to this one internally. Feeds the
   // orphan-page audit rule.
   isOrphan                    Boolean        @default(false)
+  // Distinct crawled pages that link to this URL internally — computed by
+  // the same DetectOrphanPagesUseCase pass as isOrphan. Feeds
+  // broken-status-code-rule's severity tiering.
+  inboundInternalLinkCount    Int            @default(0)
+  // Whether this URL appears in the site's live sitemap.xml — computed by
+  // AuditRobotsAndSitemapUseCase. Null means the sitemap couldn't be
+  // fetched/parsed this run (see sitemapIsUnreachable/sitemapIsInvalidXml
+  // below), which is a different fact from "fetched fine, not listed"
+  // (false). Feeds broken-status-code-rule's severity tiering.
+  isInSitemap                 Boolean?
   // Raw Content-Security-Policy response header, null when absent. Feeds
   // the csp-blocks-script audit rule.
   cspHeader                   String?
@@ -173,6 +183,12 @@ model Page {
   // Subset of hreflangLinks above whose target does not link back —
   // computed post-crawl, same as hreflangLinks' own consumer.
   hreflangMissingReturnTags    Json           @default("[]")
+  // Response Content-Type header, stripped of charset (e.g.
+  // "application/pdf", "text/html"), null when the header was absent or
+  // (for rows crawled before this field existed) never captured. Lets
+  // HTML-structure audit rules skip non-HTML resources — see
+  // Page.isHtml() in the domain entity for the null-handling default.
+  contentType                  String?
   links                       Link[]
   auditIssues                 AuditIssue[]
   schemaMarkups               SchemaMarkup[]

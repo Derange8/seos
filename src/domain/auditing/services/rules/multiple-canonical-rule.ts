@@ -4,6 +4,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 
 export const multipleCanonicalRule: AuditRule = {
   id: "multiple-canonical",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.canonicalTagCount <= 1) return [];
     return [

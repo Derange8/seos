@@ -7,6 +7,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 // a defect, same severity rationale as missing-canonical.
 export const missingStructuredDataRule: AuditRule = {
   id: "missing-structured-data",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.hasStructuredData) return [];
     return [

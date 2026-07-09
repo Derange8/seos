@@ -182,6 +182,7 @@ export function fetchOk(overrides: Partial<PageFetchResult> = {}, finalUrl: Page
     redirectChain: [],
     renderMode: "HTTP",
     cspHeader: null,
+    contentType: null,
     ...overrides,
   });
 }

@@ -4,6 +4,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 
 export const duplicateContentRule: AuditRule = {
   id: "duplicate-content",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (!page.hasDuplicateContent) return [];
     return [

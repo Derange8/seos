@@ -8,6 +8,7 @@ import type { Page } from "@/domain/crawling/entities/page";
 // broken-internal-links-rule has on DetectBrokenLinksUseCase.
 export const duplicateTitleRule: AuditRule = {
   id: "duplicate-title",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (!page.hasDuplicateTitle) return [];
     return [

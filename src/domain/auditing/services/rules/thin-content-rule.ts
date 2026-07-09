@@ -6,6 +6,7 @@ const MIN_WORD_COUNT = 300;
 
 export const thinContentRule: AuditRule = {
   id: "thin-content",
+  isHtmlOnly: true,
   evaluate(page: Page): AuditFinding[] {
     if (page.wordCount === null || page.wordCount >= MIN_WORD_COUNT) return [];
     return [

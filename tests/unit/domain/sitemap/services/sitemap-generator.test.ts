@@ -88,6 +88,9 @@ describe("selectSitemapEntries", () => {
         tbtMs: null,
         hreflangLinks: [],
         hreflangMissingReturnTags: [],
+        contentType: null,
+        inboundInternalLinkCount: 0,
+        isInSitemap: null,
       },
       []
     );

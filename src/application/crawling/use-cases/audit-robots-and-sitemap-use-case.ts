@@ -14,6 +14,16 @@ export interface AuditRobotsAndSitemapDeps {
   pageFetcher: PageFetcherPort;
 }
 
+// Real sitemaps (WordPress/Yoast, most large CMSes) commonly split page
+// URLs across several leaf sitemaps (post-sitemap.xml, page-sitemap.xml,
+// ...) and list only those in the top-level sitemap.xml — a
+// <sitemapindex>. Bounded fan-out, not unlimited: a hostile or
+// misconfigured index could otherwise point at hundreds of "child"
+// sitemaps and turn one crawl's post-processing into hundreds of extra
+// HTTP requests. This covers every real CMS sitemap structure seen in
+// practice (a handful of leaf files) while capping the worst case.
+const MAX_CHILD_SITEMAPS = 20;
+
 // Cross-page, same family as DetectOrphanPagesUseCase/DetectBrokenLinksUseCase
 // — runs once per crawl job, before RunAuditUseCase (see crawl-pipeline.ts's
 // CrawlJobCompleted handler order), so the robots/sitemap audit rules can
@@ -61,12 +71,19 @@ export class AuditRobotsAndSitemapUseCase {
     const sitemapUrlResult = Url.create(new URL("/sitemap.xml", origin).href);
     let sitemapIsUnreachable = true;
     let sitemapIsInvalidXml: boolean | null = null;
+    let sitemapUrls: Set<string> | null = null;
 
     if (sitemapUrlResult.ok) {
       const fetchResult = await this.deps.pageFetcher.fetch(sitemapUrlResult.value);
       if (fetchResult.ok && fetchResult.value.statusCode < 400) {
         sitemapIsUnreachable = false;
-        sitemapIsInvalidXml = !analyzeSitemapXml(fetchResult.value.html).isValid;
+        const analysis = analyzeSitemapXml(fetchResult.value.html);
+        sitemapIsInvalidXml = !analysis.isValid;
+        if (analysis.isValid) {
+          sitemapUrls = analysis.isSitemapIndex
+            ? await this.resolveSitemapIndex(analysis.urls)
+            : new Set(analysis.urls);
+        }
       }
     }
 
@@ -75,6 +92,48 @@ export class AuditRobotsAndSitemapUseCase {
       sitemapIsUnreachable,
       sitemapIsInvalidXml,
     });
+
+    // Per-page, not site-level like the flags above — every crawled page
+    // (not just the root) needs its own answer to "is this URL actually
+    // listed in the live sitemap," since that's what lets
+    // broken-status-code-rule tell a 404 the site owner still points
+    // search engines at (sitemapUrls has it) apart from one that's simply
+    // fallen out of the site's own navigation and sitemap alike. Null
+    // (sitemapUrls === null) propagates "couldn't determine this run" to
+    // every page rather than defaulting to false, which would read as a
+    // confident "not in the sitemap" when the sitemap was never actually
+    // read.
+    for (const page of pages) {
+      const isInSitemap = sitemapUrls === null ? null : sitemapUrls.has(page.url.href);
+      page.setIsInSitemap(isInSitemap);
+    }
+
     await this.deps.pageRepository.save(projectId, rootPage);
+    for (const page of pages) {
+      if (page.id === rootPage.id) continue; // already saved above with the site-level flags
+      await this.deps.pageRepository.save(projectId, page);
+    }
+  }
+
+  // Fetches every child sitemap listed in a <sitemapindex> and merges
+  // their page URLs into one set. A child that fails to fetch or parse is
+  // skipped, not treated as "the whole index failed" — a site with one
+  // broken leaf sitemap (e.g. a plugin-generated one that's temporarily
+  // 500ing) shouldn't lose isInSitemap coverage for every other leaf that
+  // fetched fine.
+  private async resolveSitemapIndex(childSitemapUrls: readonly string[]): Promise<Set<string>> {
+    const merged = new Set<string>();
+    for (const rawUrl of childSitemapUrls.slice(0, MAX_CHILD_SITEMAPS)) {
+      const childUrlResult = Url.create(rawUrl);
+      if (!childUrlResult.ok) continue;
+
+      const fetchResult = await this.deps.pageFetcher.fetch(childUrlResult.value);
+      if (!fetchResult.ok || fetchResult.value.statusCode >= 400) continue;
+
+      const analysis = analyzeSitemapXml(fetchResult.value.html);
+      if (!analysis.isValid || analysis.isSitemapIndex) continue; // one level of nesting only
+      for (const url of analysis.urls) merged.add(url);
+    }
+    return merged;
   }
 }

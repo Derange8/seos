@@ -94,6 +94,8 @@ function toDomain(row: PrismaPageRow & { links: PrismaLinkRow[] }): Page {
     canonicalTagCount: row.canonicalTagCount,
     isNoindex: row.isNoindex,
     isOrphan: row.isOrphan,
+    inboundInternalLinkCount: row.inboundInternalLinkCount,
+    isInSitemap: row.isInSitemap,
     cspHeader: row.cspHeader,
     externalScriptOrigins: toDomainExternalScriptOrigins(row.externalScriptOrigins),
     rawWordCount: row.rawWordCount,
@@ -107,6 +109,7 @@ function toDomain(row: PrismaPageRow & { links: PrismaLinkRow[] }): Page {
     tbtMs: row.tbtMs,
     hreflangLinks: toDomainHreflangLinks(row.hreflangLinks),
     hreflangMissingReturnTags: toDomainHreflangLinks(row.hreflangMissingReturnTags),
+    contentType: row.contentType,
   };
 
   const links = row.links.map((linkRow) =>
@@ -150,6 +153,8 @@ export class PrismaPageRepository implements PageRepositoryPort {
       canonicalTagCount: page.canonicalTagCount,
       isNoindex: page.isNoindex,
       isOrphan: page.isOrphan,
+      inboundInternalLinkCount: page.inboundInternalLinkCount,
+      isInSitemap: page.isInSitemap,
       cspHeader: page.cspHeader,
       externalScriptOrigins: page.externalScriptOrigins,
       rawWordCount: page.rawWordCount,
@@ -166,6 +171,7 @@ export class PrismaPageRepository implements PageRepositoryPort {
         hreflang: link.hreflang,
         url: link.url,
       })),
+      contentType: page.contentType,
       crawledAt: page.crawledAt,
     };
 
