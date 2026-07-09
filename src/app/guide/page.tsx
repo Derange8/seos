@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AppShell } from "@/components/app-shell";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/use-language";
 
@@ -938,7 +938,7 @@ const STEPS_TR: Section[] = [
 ];
 
 export default function GuidePage() {
-  const [language, setLanguage] = useLanguage();
+  const [language] = useLanguage();
   const [activeTab, setActiveTab] = useState<TabId>("why");
 
   const sections =
@@ -947,58 +947,47 @@ export default function GuidePage() {
     : language === "en" ? STEPS_EN : STEPS_TR;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
-      <div className="flex items-start justify-between">
-        <div>
-          <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
-            ← {language === "en" ? "Back" : "Geri"}
-          </Link>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+    <AppShell active="guide">
+      <div className="mx-auto flex max-w-3xl flex-col gap-8">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-3xl font-semibold tracking-tight">
             {language === "en" ? "The Seos Guide" : "Seos Kılavuzu"}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {language === "en"
               ? "Why this program exists, everything it does, and how to use it."
               : "Bu programın neden var olduğu, yaptığı her şey ve nasıl kullanılacağı."}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant={language === "en" ? "default" : "outline"} size="sm" onClick={() => setLanguage("en")}>
-            English
-          </Button>
-          <Button variant={language === "tr" ? "default" : "outline"} size="sm" onClick={() => setLanguage("tr")}>
-            Türkçe
-          </Button>
+
+        <div className="inset-panel flex gap-1 overflow-x-auto rounded-xl p-1.5">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "shrink-0 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
+                activeTab === tab.id
+                  ? "bg-white/10 text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+              )}
+            >
+              {language === "en" ? tab.en : tab.tr}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-4">
+          {sections.map((section) => (
+            <Card key={section.title}>
+              <CardHeader>
+                <CardTitle className="text-lg">{section.title}</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3 text-sm leading-relaxed text-muted-foreground">{section.body}</CardContent>
+            </Card>
+          ))}
         </div>
       </div>
-
-      <div className="flex gap-2 overflow-x-auto border-b border-white/10 pb-2">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              "shrink-0 rounded-lg px-3 py-1.5 text-sm transition",
-              activeTab === tab.id
-                ? "bg-white/10 text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-            )}
-          >
-            {language === "en" ? tab.en : tab.tr}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-4">
-        {sections.map((section) => (
-          <Card key={section.title}>
-            <CardHeader>
-              <CardTitle className="text-base">{section.title}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2 text-sm text-muted-foreground">{section.body}</CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
+    </AppShell>
   );
 }

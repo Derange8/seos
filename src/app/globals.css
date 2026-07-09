@@ -10,6 +10,8 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-geist-sans);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -81,6 +83,8 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --success: oklch(0.6 0.16 145);
+  --warning: oklch(0.75 0.15 80);
 }
 
 .dark {
@@ -115,6 +119,8 @@
   --sidebar-accent-foreground: oklch(0.97 0.01 280);
   --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: oklch(0.7 0.19 290 / 50%);
+  --success: oklch(0.75 0.16 145);
+  --warning: oklch(0.8 0.15 85);
 }
 
 @layer base {
@@ -170,4 +176,14 @@
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid oklch(1 0 0 / 12%);
   box-shadow: 0 8px 32px oklch(0 0 0 / 25%);
+}
+
+/* A flat secondary surface for content nested inside a .glass-card (e.g. a
+   fix suggestion box inside an audit issue, a code/data preview) — stacking
+   a second blurred+shadowed glass-card there would double up the blur and
+   read muddy. No blur, no shadow, just a one-step-lighter fill so it reads
+   as "inset panel," not "another floating card." */
+.inset-panel {
+  background: oklch(1 0 0 / 5%);
+  border: 1px solid oklch(1 0 0 / 10%);
 }

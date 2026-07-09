@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { LlmSettingsDto } from "@/application/settings/dto";
+import { useLanguage } from "@/hooks/use-language";
+import { TRANSLATIONS, type TranslationKey } from "@/components/project-dashboard/shared";
 
 const PROVIDER_LABEL: Record<string, string> = {
   openai: "OpenAI",
@@ -15,6 +17,8 @@ const PROVIDER_LABEL: Record<string, string> = {
 };
 
 export function LlmSettingsForm() {
+  const [language] = useLanguage();
+  const t = (key: TranslationKey) => TRANSLATIONS[key][language];
   const [settings, setSettings] = useState<LlmSettingsDto | null>(null);
   const [provider, setProvider] = useState("openai");
   const [apiKey, setApiKey] = useState("");
@@ -50,14 +54,14 @@ export function LlmSettingsForm() {
       });
     } catch {
       setIsSaving(false);
-      setError("Network error — check your connection and try again.");
+      setError(t("networkErrorRetry"));
       return;
     }
 
     const data = await response.json();
     setIsSaving(false);
     if (!response.ok) {
-      setError(data.error ?? "Failed to save settings");
+      setError(data.error ?? t("failedToSaveSettings"));
       return;
     }
     setSettings(data);
@@ -81,58 +85,69 @@ export function LlmSettingsForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>AI Provider</CardTitle>
+        <CardTitle>{t("aiProviderTitle")}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
         <p className="text-muted-foreground">
           {settings ? (
             <>
-              Configured: <span className="font-medium text-foreground">{PROVIDER_LABEL[settings.provider] ?? settings.provider}</span>
+              {t("configuredLabel")}{" "}
+              <span className="font-medium text-foreground">{PROVIDER_LABEL[settings.provider] ?? settings.provider}</span>
               {settings.model ? ` (${settings.model})` : ""}
             </>
           ) : (
-            "Not configured — audit recommendations use free, template-based text until a key is added here."
+            t("notConfiguredHint")
           )}
         </p>
 
         <form onSubmit={handleSave} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="provider">Provider</Label>
-            <select
-              id="provider"
-              value={provider}
-              onChange={(event) => setProvider(event.target.value)}
-              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              <option value="openai">OpenAI</option>
-              <option value="anthropic">Anthropic (Claude)</option>
-              <option value="deepseek">DeepSeek</option>
-              <option value="gemini">Gemini (Google)</option>
-            </select>
+            <Label htmlFor="provider">{t("provider")}</Label>
+            <div className="relative">
+              <select
+                id="provider"
+                value={provider}
+                onChange={(event) => setProvider(event.target.value)}
+                className="h-8 w-full appearance-none rounded-lg border border-input bg-transparent px-2.5 pr-8 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+              >
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="gemini">Gemini (Google)</option>
+              </select>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                aria-hidden
+                className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="apiKey">API Key</Label>
+            <Label htmlFor="apiKey">{t("apiKey")}</Label>
             <Input
               id="apiKey"
               type="password"
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
-              placeholder={settings ? "Enter a new key to replace the saved one" : "sk-..."}
+              placeholder={settings ? t("apiKeyReplaceHint") : "sk-..."}
               required={!settings}
             />
-            <p className="text-xs text-muted-foreground">
-              Stays on this computer, encrypted at rest — never sent anywhere except the provider you pick above.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("apiKeyStaysHint")}</p>
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="model">Model (optional)</Label>
+            <Label htmlFor="model">{t("modelOptional")}</Label>
             <Input
               id="model"
               value={model}
               onChange={(event) => setModel(event.target.value)}
-              placeholder="Defaults to a sensible model for the provider"
+              placeholder={t("modelDefaultHint")}
             />
           </div>
 
@@ -140,11 +155,11 @@ export function LlmSettingsForm() {
 
           <div className="flex gap-2">
             <Button type="submit" disabled={isSaving}>
-              {isSaving ? "Saving…" : "Save"}
+              {isSaving ? t("saving") : t("saveLabel")}
             </Button>
             {settings && (
               <Button type="button" variant="outline" onClick={handleRemove} disabled={isRemoving}>
-                {isRemoving ? "Removing…" : "Remove"}
+                {isRemoving ? t("removing") : t("removeLabel")}
               </Button>
             )}
           </div>
